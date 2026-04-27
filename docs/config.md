@@ -1,8 +1,8 @@
 # Config reference
 
-Two config files live in your plugin repo under `.evalforge/`: `evalforge.yaml` (settings) and `prompts.yaml` (eval prompts + rubrics).
+Two config files live in your plugin repo under `.eval-bench/`: `eval-bench.yaml` (settings) and `prompts.yaml` (eval prompts + rubrics).
 
-## evalforge.yaml
+## eval-bench.yaml
 
 ### plugin
 
@@ -73,10 +73,10 @@ runs:
 
 ```yaml
 snapshots:
-  dir: ./.evalforge/snapshots
+  dir: ./.eval-bench/snapshots
 ```
 
-Where snapshot JSON and HTML views are written. Commit this to git if you want a historical record; otherwise it's ignored by default (`.evalforge/` is in `.gitignore`).
+Where snapshot JSON and HTML views are written. Commit this to git if you want a historical record; otherwise it's ignored by default (`.eval-bench/` is in `.gitignore`).
 
 ## prompts.yaml
 

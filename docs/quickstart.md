@@ -28,11 +28,11 @@ cd my-claude-plugin
 eb init
 ```
 
-This creates a `.evalforge/` directory containing `evalforge.yaml`, `prompts.yaml`, and a `snapshots/` subdirectory.
+This creates a `.eval-bench/` directory containing `eval-bench.yaml`, `prompts.yaml`, and a `snapshots/` subdirectory.
 
 ## 4. Write prompts
 
-Edit `.evalforge/prompts.yaml`. Three to five prompts that exercise your plugin's key capabilities. For each, write a specific rubric.
+Edit `.eval-bench/prompts.yaml`. Three to five prompts that exercise your plugin's key capabilities. For each, write a specific rubric.
 
 ```yaml
 - id: find-user-by-email

@@ -38,8 +38,8 @@ function applyOverrides(cfg: Config, opts: RunOptions): Config {
 }
 
 export async function runCommand(opts: RunOptions): Promise<number> {
-  const configPath = opts.config ?? '.evalforge/evalforge.yaml';
-  const promptsPath = opts.prompts ?? '.evalforge/prompts.yaml';
+  const configPath = opts.config ?? '.eval-bench/eval-bench.yaml';
+  const promptsPath = opts.prompts ?? '.eval-bench/prompts.yaml';
   const cfg = applyOverrides(loadConfig(configPath), opts);
   const prompts = loadPrompts(promptsPath);
   const gitRoot = cfg.plugin.gitRoot;

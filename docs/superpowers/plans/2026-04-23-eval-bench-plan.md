@@ -1,21 +1,21 @@
-# evalforge Implementation Plan
+# eval-bench Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build `evalforge` — an npm-distributed CLI that benchmarks a Claude Code **plugin** (any combination of skills, subagents, MCP servers, slash commands, and hooks) by running prompts against two plugin versions, grading outputs with a configurable LLM judge (local Ollama, Anthropic, OpenAI, or any OpenAI-compatible endpoint), and producing a comparison report. The tool drives the real `claude` CLI so the full plugin manifest loads — skills register, MCP servers start, subagents wire up, hooks fire — making the benchmark reflect actual end-to-end behavior, not isolated component tests.
+**Goal:** Build `eval-bench` — an npm-distributed CLI that benchmarks a Claude Code **plugin** (any combination of skills, subagents, MCP servers, slash commands, and hooks) by running prompts against two plugin versions, grading outputs with a configurable LLM judge (local Ollama, Anthropic, OpenAI, or any OpenAI-compatible endpoint), and producing a comparison report. The tool drives the real `claude` CLI so the full plugin manifest loads — skills register, MCP servers start, subagents wire up, hooks fire — making the benchmark reflect actual end-to-end behavior, not isolated component tests.
 
-**Architecture:** TypeScript monorepo-free package. CLI (commander) wraps a core library. Plugin versions are swapped by creating a git worktree at the baseline ref and invoking `claude -p` with the EVALFORGE_PLUGIN_DIR env var pointed at the right directory. Judges share a single OpenAI-compatible HTTP client; Anthropic has its own thin client. Results are stored as JSON snapshots; comparisons are markdown + JSON.
+**Architecture:** TypeScript monorepo-free package. CLI (commander) wraps a core library. Plugin versions are swapped by creating a git worktree at the baseline ref and invoking `claude -p` with the EVAL_BENCH_PLUGIN_DIR env var pointed at the right directory. Judges share a single OpenAI-compatible HTTP client; Anthropic has its own thin client. Results are stored as JSON snapshots; comparisons are markdown + JSON.
 
 **Tech Stack:** Node 20+, TypeScript (ESM), commander, zod, yaml, execa, chalk, vitest, prettier, eslint. Dev dep: tsx. Packaging: npm (CJS + ESM dual).
 
-**Companion spec:** `docs/superpowers/specs/2026-04-23-evalforge-spec.md`
+**Companion spec:** `docs/superpowers/specs/2026-04-23-eval-bench-spec.md`
 
 ---
 
 ## File Structure
 
 ```
-evalforge/
+eval-bench/
 ├── package.json
 ├── tsconfig.json
 ├── vitest.config.ts
@@ -33,7 +33,7 @@ evalforge/
 │   │   ├── snapshot.ts           # `ef snapshot` handler
 │   │   └── compare.ts            # `ef compare` handler
 │   ├── types.ts                  # shared type definitions
-│   ├── config.ts                 # load/validate evalforge.yaml
+│   ├── config.ts                 # load/validate eval-bench.yaml
 │   ├── prompts.ts                # load/validate prompts.yaml
 │   ├── swap.ts                   # git worktree lifecycle
 │   ├── provider.ts               # invoke `claude -p` subprocess
@@ -50,7 +50,7 @@ evalforge/
 │   ├── compare.ts                # diff two snapshots, format markdown
 │   └── logger.ts                 # chalk-colored progress output
 ├── templates/
-│   ├── evalforge.yaml          # scaffolded by `ef init`
+│   ├── eval-bench.yaml          # scaffolded by `ef init`
 │   ├── prompts.yaml              # scaffolded by `ef init`
 │   └── github-action.yml         # scaffolded by `ef init --ci`
 ├── tests/
@@ -106,7 +106,7 @@ Expected: FAIL — cannot find module `../src/index.js`.
 `package.json`:
 ```json
 {
-  "name": "evalforge",
+  "name": "eval-bench",
   "version": "0.1.0",
   "description": "Benchmark Claude Code plugins by A/B comparing plugin versions with LLM-judged evaluation prompts.",
   "license": "MIT",
@@ -114,7 +114,7 @@ Expected: FAIL — cannot find module `../src/index.js`.
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "evalforge": "dist/cli/index.js",
+    "eval-bench": "dist/cli/index.js",
     "ef": "dist/cli/index.js"
   },
   "files": ["dist", "templates", "README.md", "LICENSE"],
@@ -281,7 +281,7 @@ module.exports = {
 
 `README.md` (stub — full content in Task 25):
 ```markdown
-# evalforge
+# eval-bench
 
 Benchmark Claude Code plugins by A/B comparing plugin versions with LLM-judged evaluation prompts.
 
@@ -337,7 +337,7 @@ import { execa } from 'execa';
 describe('cli', () => {
   it('prints help with --help', async () => {
     const result = await execa('npx', ['tsx', 'src/cli/index.ts', '--help']);
-    expect(result.stdout).toMatch(/Usage: evalforge/);
+    expect(result.stdout).toMatch(/Usage: eval-bench/);
     expect(result.stdout).toMatch(/init/);
     expect(result.stdout).toMatch(/run/);
     expect(result.stdout).toMatch(/compare/);
@@ -366,7 +366,7 @@ import { version } from '../index.js';
 const program = new Command();
 
 program
-  .name('evalforge')
+  .name('eval-bench')
   .description('Benchmark Claude Code plugins by A/B comparing plugin versions with LLM judging.')
   .version(version);
 
@@ -385,7 +385,7 @@ program
   .option('--baseline <ref>', 'Git ref for baseline')
   .option('--current <ref>', 'Git ref for current', 'HEAD')
   .option('--prompts <file>', 'Prompts file', './prompts.yaml')
-  .option('--config <file>', 'Config file', './evalforge.yaml')
+  .option('--config <file>', 'Config file', './eval-bench.yaml')
   .option('--samples <n>', 'Override samples-per-prompt', (v) => parseInt(v, 10))
   .option('--judge <spec>', 'Override judge, e.g. ollama:qwen2.5:14b')
   .option('--save-as <name>', 'Save snapshot under this name')
@@ -642,7 +642,7 @@ import { loadConfig } from '../src/config.js';
 
 function writeTempYaml(content: string): string {
   const dir = mkdtempSync(join(tmpdir(), 'ef-test-'));
-  const path = join(dir, 'evalforge.yaml');
+  const path = join(dir, 'eval-bench.yaml');
   writeFileSync(path, content);
   return path;
 }
@@ -776,7 +776,7 @@ Expected: PASS — 4 tests.
 
 ```bash
 git add src/config.ts tests/config.test.ts
-git commit -m "feat(config): load and validate evalforge.yaml with zod"
+git commit -m "feat(config): load and validate eval-bench.yaml with zod"
 ```
 
 ---
@@ -1029,7 +1029,7 @@ git commit -m "feat(swap): create and clean up git worktrees for plugin-version 
 const args = process.argv.slice(2);
 const promptIdx = args.indexOf('-p');
 const prompt = promptIdx >= 0 ? args[promptIdx + 1] : '';
-console.log(`[PLUGIN_DIR=${process.env.EVALFORGE_PLUGIN_DIR ?? ''}] ${prompt}`);
+console.log(`[PLUGIN_DIR=${process.env.EVAL_BENCH_PLUGIN_DIR ?? ''}] ${prompt}`);
 process.exit(0);
 ```
 
@@ -1121,7 +1121,7 @@ export async function invokeClaude(opts: InvokeClaudeOptions): Promise<InvokeCla
       reject: false,
       env: {
         ...process.env,
-        EVALFORGE_PLUGIN_DIR: opts.pluginDir,
+        EVAL_BENCH_PLUGIN_DIR: opts.pluginDir,
       },
     });
     const durationMs = Date.now() - started;
@@ -2778,7 +2778,7 @@ git commit -m "feat(compare): format comparison as markdown table with per-promp
 ### Task 20: `ef init`
 
 **Files:**
-- Create: `templates/evalforge.yaml`
+- Create: `templates/eval-bench.yaml`
 - Create: `templates/prompts.yaml`
 - Create: `templates/github-action.yml`
 - Create: `src/cli/init.ts`
@@ -2796,27 +2796,27 @@ import { join } from 'node:path';
 import { runInit } from '../src/cli/init.js';
 
 describe('ef init', () => {
-  it('writes evalforge.yaml, prompts.yaml, snapshots/.gitkeep', async () => {
+  it('writes eval-bench.yaml, prompts.yaml, snapshots/.gitkeep', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'ef-init-'));
     await runInit({ cwd: dir, ci: false });
-    expect(existsSync(join(dir, 'evalforge.yaml'))).toBe(true);
+    expect(existsSync(join(dir, 'eval-bench.yaml'))).toBe(true);
     expect(existsSync(join(dir, 'prompts.yaml'))).toBe(true);
     expect(existsSync(join(dir, 'snapshots', '.gitkeep'))).toBe(true);
-    expect(readFileSync(join(dir, 'evalforge.yaml'), 'utf8')).toContain('judge:');
+    expect(readFileSync(join(dir, 'eval-bench.yaml'), 'utf8')).toContain('judge:');
   });
 
   it('emits GH Actions workflow with --ci', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'ef-init-'));
     await runInit({ cwd: dir, ci: true });
-    expect(existsSync(join(dir, '.github', 'workflows', 'evalforge.yml'))).toBe(true);
+    expect(existsSync(join(dir, '.github', 'workflows', 'eval-bench.yml'))).toBe(true);
   });
 
   it('does not overwrite existing files', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'ef-init-'));
     const { writeFileSync } = await import('node:fs');
-    writeFileSync(join(dir, 'evalforge.yaml'), 'custom');
+    writeFileSync(join(dir, 'eval-bench.yaml'), 'custom');
     await runInit({ cwd: dir, ci: false });
-    expect(readFileSync(join(dir, 'evalforge.yaml'), 'utf8')).toBe('custom');
+    expect(readFileSync(join(dir, 'eval-bench.yaml'), 'utf8')).toBe('custom');
   });
 });
 ```
@@ -2828,10 +2828,10 @@ Expected: FAIL.
 
 - [ ] **Step 3: Create templates and init handler**
 
-`templates/evalforge.yaml`:
+`templates/eval-bench.yaml`:
 ```yaml
-# evalforge configuration
-# See https://github.com/<org>/evalforge/blob/main/docs/config.md
+# eval-bench configuration
+# See https://github.com/<org>/eval-bench/blob/main/docs/config.md
 
 plugin:
   path: ./
@@ -2935,7 +2935,7 @@ jobs:
           sleep 2
           ollama pull qwen2.5:14b
       - run: |
-          npx evalforge run \
+          npx eval-bench run \
             --baseline origin/main \
             --current HEAD \
             --save-as pr-${{ github.event.pull_request.number }} \
@@ -2977,9 +2977,9 @@ async function copyTemplate(templateName: string, targetPath: string): Promise<b
 export async function runInit(opts: { cwd: string; ci: boolean }): Promise<void> {
   const wrote: string[] = [];
   const skipped: string[] = [];
-  if (await copyTemplate('evalforge.yaml', join(opts.cwd, 'evalforge.yaml')))
-    wrote.push('evalforge.yaml');
-  else skipped.push('evalforge.yaml');
+  if (await copyTemplate('eval-bench.yaml', join(opts.cwd, 'eval-bench.yaml')))
+    wrote.push('eval-bench.yaml');
+  else skipped.push('eval-bench.yaml');
   if (await copyTemplate('prompts.yaml', join(opts.cwd, 'prompts.yaml')))
     wrote.push('prompts.yaml');
   else skipped.push('prompts.yaml');
@@ -2990,16 +2990,16 @@ export async function runInit(opts: { cwd: string; ci: boolean }): Promise<void>
     wrote.push('snapshots/.gitkeep');
   }
   if (opts.ci) {
-    const ciTarget = join(opts.cwd, '.github', 'workflows', 'evalforge.yml');
-    if (await copyTemplate('github-action.yml', ciTarget)) wrote.push('.github/workflows/evalforge.yml');
-    else skipped.push('.github/workflows/evalforge.yml');
+    const ciTarget = join(opts.cwd, '.github', 'workflows', 'eval-bench.yml');
+    if (await copyTemplate('github-action.yml', ciTarget)) wrote.push('.github/workflows/eval-bench.yml');
+    else skipped.push('.github/workflows/eval-bench.yml');
   }
   for (const f of wrote) console.log(`  created  ${f}`);
   for (const f of skipped) console.log(`  skipped  ${f} (already exists)`);
   console.log('');
   console.log('Next steps:');
   console.log('  1. Edit prompts.yaml — write 3-5 prompts that exercise your plugin');
-  console.log('  2. Edit evalforge.yaml — set judge provider and model');
+  console.log('  2. Edit eval-bench.yaml — set judge provider and model');
   console.log('  3. Run: ef run --baseline <ref> --save-as v1-baseline');
 }
 ```
@@ -3088,7 +3088,7 @@ describe('ef run', () => {
     const fakeClaude = resolve('tests/fixtures/fake-claude.js');
     chmodSync(fakeClaude, 0o755);
     writeFileSync(
-      join(repo, 'evalforge.yaml'),
+      join(repo, 'eval-bench.yaml'),
       `plugin:\n  path: ./\nprovider:\n  command: node\n  extraArgs: ['${fakeClaude}']\n  timeout: 10\njudge:\n  provider: ollama\n  model: q\n  endpoint: ${judgeUrl}\nruns:\n  samples: 1\n  parallel: 1\nsnapshots:\n  dir: ./snaps\n`,
     );
     writeFileSync(
@@ -3182,7 +3182,7 @@ function applyOverrides(cfg: Config, opts: RunOptions): Config {
 }
 
 export async function runCommand(opts: RunOptions): Promise<number> {
-  const configPath = opts.config ?? 'evalforge.yaml';
+  const configPath = opts.config ?? 'eval-bench.yaml';
   const promptsPath = opts.prompts ?? 'prompts.yaml';
   const cfg = applyOverrides(loadConfig(configPath), opts);
   const prompts = loadPrompts(promptsPath);
@@ -3355,7 +3355,7 @@ export async function snapshotRm(dir: string, name: string): Promise<void> {
 }
 ```
 
-Wire into `src/cli/index.ts` by replacing the snapshot subcommand actions (see Task 3 for context) to call these helpers. The config dir is `./snapshots` by default; read `snapshots.dir` from `evalforge.yaml` if present, else fall back.
+Wire into `src/cli/index.ts` by replacing the snapshot subcommand actions (see Task 3 for context) to call these helpers. The config dir is `./snapshots` by default; read `snapshots.dir` from `eval-bench.yaml` if present, else fall back.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -3467,7 +3467,7 @@ Wire into `src/cli/index.ts`:
 .action(async (a, b, opts) => {
   const { compareCommand } = await import('./compare.js');
   const { loadConfig } = await import('../config.js');
-  const cfg = await loadConfig('evalforge.yaml').catch(() => null);
+  const cfg = await loadConfig('eval-bench.yaml').catch(() => null);
   const dir = cfg?.snapshots.dir ?? './snapshots';
   const out = await compareCommand({ dir, from: a, to: b, format: opts.format ?? 'md', threshold: opts.threshold });
   if (opts.out) {
@@ -3624,7 +3624,7 @@ Wire into `src/cli/index.ts`:
 .action(async (snapshotName) => {
   const { loadConfig } = await import('../config.js');
   const { listSnapshots } = await import('../snapshot.js');
-  const cfg = await loadConfig('evalforge.yaml').catch(() => null);
+  const cfg = await loadConfig('eval-bench.yaml').catch(() => null);
   const dir = cfg?.snapshots.dir ?? './snapshots';
   const name = snapshotName ?? (await listSnapshots(dir)).at(-1);
   if (!name) { console.error('no snapshots found'); process.exit(1); }
@@ -3683,7 +3683,7 @@ Expected: FAIL.
 Replace `README.md` with (showing full content):
 
 ````markdown
-# evalforge
+# eval-bench
 
 Benchmark Claude Code plugins by A/B comparing plugin versions with LLM-judged evaluation prompts.
 
@@ -3692,9 +3692,9 @@ Runs a fixed set of prompts against two versions of your plugin (baseline vs cur
 ## Install
 
 ```bash
-npm i -g evalforge
+npm i -g eval-bench
 # or
-npx evalforge --help
+npx eval-bench --help
 ```
 
 Requires:
@@ -3721,7 +3721,7 @@ Full walkthrough: [docs/quickstart.md](docs/quickstart.md).
 
 - [docs/quickstart.md](docs/quickstart.md) — zero to first comparison in ten minutes
 - [docs/concepts.md](docs/concepts.md) — plugin, baseline, variant, sample, judge, rubric, snapshot
-- [docs/config.md](docs/config.md) — every field in `evalforge.yaml` and `prompts.yaml`
+- [docs/config.md](docs/config.md) — every field in `eval-bench.yaml` and `prompts.yaml`
 - [docs/rubrics.md](docs/rubrics.md) — how to write rubrics that produce reliable scores
 - [docs/judges.md](docs/judges.md) — picking a judge; local vs hosted tradeoffs; known-good models
 - [docs/ci.md](docs/ci.md) — GitHub Actions, GitLab CI, self-hosted GPU runners
@@ -3798,7 +3798,7 @@ Get from zero to your first benchmark comparison in ten minutes.
 ## 1. Install
 
 ```bash
-npm i -g evalforge
+npm i -g eval-bench
 ```
 
 ## 2. Pull a judge model (Ollama path)
@@ -3814,7 +3814,7 @@ cd my-claude-plugin
 ef init
 ```
 
-This creates `evalforge.yaml`, `prompts.yaml`, and a `snapshots/` directory.
+This creates `eval-bench.yaml`, `prompts.yaml`, and a `snapshots/` directory.
 
 ## 4. Write prompts
 
@@ -3993,7 +3993,7 @@ describe('aux docs', () => {
   });
   it('comparison-to-promptfoo.md answers "when should I use this vs raw Promptfoo"', () => {
     const p = readFileSync('docs/comparison-to-promptfoo.md', 'utf8');
-    expect(p.toLowerCase()).toMatch(/use evalforge when/);
+    expect(p.toLowerCase()).toMatch(/use eval-bench when/);
     expect(p.toLowerCase()).toMatch(/use raw promptfoo when/);
   });
 });
@@ -4013,7 +4013,7 @@ describe('aux docs', () => {
 - "timed out" — increase `provider.timeout`; consider `--samples 1` for faster iteration
 
 `docs/comparison-to-promptfoo.md` — two-section decision doc:
-- **Use evalforge when:** benchmarking a Claude Code plugin end-to-end with real skills/MCPs/subagents loaded; comparing plugin versions via git refs; want a turnkey A/B with LLM-as-judge and no YAML learning curve.
+- **Use eval-bench when:** benchmarking a Claude Code plugin end-to-end with real skills/MCPs/subagents loaded; comparing plugin versions via git refs; want a turnkey A/B with LLM-as-judge and no YAML learning curve.
 - **Use raw Promptfoo when:** benchmarking arbitrary LLM prompts across multiple providers (OpenAI + Anthropic + Gemini side-by-side); red-team testing; dataset-based evaluation with Promptfoo's built-in datasets; need Promptfoo's plugin/extension ecosystem.
 
 - [ ] **Step 4: Run test — PASS**
@@ -4085,8 +4085,8 @@ describe('e2e', () => {
 
     const cli = resolve('src/cli/index.ts');
     // init is already present via toy plugin fixture; override judge endpoint:
-    const cfg = readFileSync(join(repo, 'evalforge.yaml'), 'utf8').replace('JUDGE_URL', judgeUrl);
-    writeFileSync(join(repo, 'evalforge.yaml'), cfg);
+    const cfg = readFileSync(join(repo, 'eval-bench.yaml'), 'utf8').replace('JUDGE_URL', judgeUrl);
+    writeFileSync(join(repo, 'eval-bench.yaml'), cfg);
 
     // baseline run
     const r1 = await execa('npx', ['tsx', cli, 'run', '--baseline', 'HEAD', '--save-as', 'v1-baseline'], { cwd: repo, reject: false });
@@ -4104,7 +4104,7 @@ describe('e2e', () => {
 });
 ```
 
-`tests/e2e/toy-plugin/evalforge.yaml`:
+`tests/e2e/toy-plugin/eval-bench.yaml`:
 ```yaml
 plugin:
   path: ./
@@ -4138,7 +4138,7 @@ snapshots:
 #!/usr/bin/env node
 const args = process.argv.slice(2);
 const p = args[args.indexOf('-p') + 1];
-console.log(`PLUGIN=${process.env.EVALFORGE_PLUGIN_DIR ?? ''} P=${p}`);
+console.log(`PLUGIN=${process.env.EVAL_BENCH_PLUGIN_DIR ?? ''} P=${p}`);
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -4270,7 +4270,7 @@ All notable changes to this project will be documented in this file.
 
 Initial release.
 
-- `ef init` — scaffold `evalforge.yaml`, `prompts.yaml`, `snapshots/`, and optional GitHub Actions workflow
+- `ef init` — scaffold `eval-bench.yaml`, `prompts.yaml`, `snapshots/`, and optional GitHub Actions workflow
 - `ef run` — benchmark plugin by running each prompt × sample × variant via `claude -p`, judged by Ollama / Anthropic / OpenAI / OpenAI-compatible
 - `ef snapshot list | show | rm` — manage stored snapshots
 - `ef compare` — diff two snapshots, emit markdown or JSON
@@ -4281,9 +4281,9 @@ Initial release.
 
 Update `package.json`:
 ```json
-  "repository": { "type": "git", "url": "git+https://github.com/<owner>/evalforge.git" },
-  "bugs": { "url": "https://github.com/<owner>/evalforge/issues" },
-  "homepage": "https://github.com/<owner>/evalforge#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/<owner>/eval-bench.git" },
+  "bugs": { "url": "https://github.com/<owner>/eval-bench/issues" },
+  "homepage": "https://github.com/<owner>/eval-bench#readme",
   "keywords": ["claude", "claude-code", "llm", "eval", "benchmark", "plugin", "skills", "mcp"],
 ```
 
@@ -4345,9 +4345,9 @@ git commit -m "chore: add test:coverage and publish:dry scripts"
 
 ## Execution handoff
 
-Plan complete and saved to `docs/superpowers/plans/2026-04-23-evalforge-plan.md`. Two execution options:
+Plan complete and saved to `docs/superpowers/plans/2026-04-23-eval-bench-plan.md`. Two execution options:
 
 1. **Subagent-Driven (recommended)** — dispatch a fresh subagent per task, review between tasks, fast iteration
 2. **Inline Execution** — execute tasks in this session using executing-plans, batch execution with checkpoints
 
-Which approach? (To execute now, you will also need to create the target repository first — see `docs/superpowers/specs/2026-04-23-evalforge-spec.md` §13 for the layout and §14 for MVP scope.)
+Which approach? (To execute now, you will also need to create the target repository first — see `docs/superpowers/specs/2026-04-23-eval-bench-spec.md` §13 for the layout and §14 for MVP scope.)

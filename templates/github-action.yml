@@ -43,4 +43,4 @@ jobs:
         if: always()
         with:
           name: benchmark-results
-          path: .evalforge/snapshots/
+          path: .eval-bench/snapshots/

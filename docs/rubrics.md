@@ -6,7 +6,7 @@ A rubric is the grading sheet you write for each prompt. It says, in plain text,
 
 Think of it as the answer key a teacher gives a TA before grading exams. Without one, the TA invents their own standard and grades differently every time. With one, two different TAs land on roughly the same score.
 
-You write one rubric per prompt, alongside the prompt in `.evalforge/prompts.yaml`:
+You write one rubric per prompt, alongside the prompt in `.eval-bench/prompts.yaml`:
 
 ```yaml
 - id: list-products

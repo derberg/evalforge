@@ -47,7 +47,7 @@ describe('ef run', () => {
     const fakeClaude = resolve('tests/fixtures/fake-claude.js');
     chmodSync(fakeClaude, 0o755);
     writeFileSync(
-      join(repo, 'evalforge.yaml'),
+      join(repo, 'eval-bench.yaml'),
       `plugin:\n  path: ./\nprovider:\n  command: node\n  extraArgs: ['${fakeClaude}']\n  timeout: 10\njudge:\n  provider: ollama\n  model: q\n  endpoint: ${judgeUrl}\nruns:\n  samples: 1\n  parallel: 1\nsnapshots:\n  dir: ./snaps\n`,
     );
     writeFileSync(join(repo, 'prompts.yaml'), `- id: p1\n  prompt: hello\n  rubric: score 0-5\n`);

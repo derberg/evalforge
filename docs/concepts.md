@@ -1,6 +1,6 @@
 # Concepts
 
-**Plugin** — the Claude Code plugin under test. A directory containing `.claude-plugin/plugin.json` and any combination of `skills/`, `agents/`, `commands/`, `hooks/`, and MCP server declarations. Must be in a git repo.
+**Plugin** — the Claude Code plugin under test. A directory containing `.claude-plugin/plugin.json` and any combination of `skills/`, `agents/`, `commands/`, `hooks/`, and MCP server declarations. Must be in a git repo. If you only have standalone `skills/` or `agents/` directories without `plugin.json`, eval-bench will automatically create a temporary minimal manifest during benchmark runs.
 
 **Skill** — a `SKILL.md` (plus optional resources) under `skills/<name>/`. Loaded into Claude Code's skill registry when the plugin is active.
 
@@ -24,6 +24,6 @@
 
 **Rubric** — per-prompt grading criteria. Write a specific, checklist-style rubric; vague rubrics produce noisy judge scores. See [rubrics.md](rubrics.md).
 
-**Snapshot** — the saved result of an `eb run`. JSON file at `.evalforge/snapshots/<name>/snapshot.json`. Contains the prompts, every run's output, every judgment, and summary statistics. Commit them to git if you want a historical record.
+**Snapshot** — the saved result of an `eb run`. JSON file at `.eval-bench/snapshots/<name>/snapshot.json`. Contains the prompts, every run's output, every judgment, and summary statistics. Commit them to git if you want a historical record.
 
 **Comparison** — the diff between two snapshots. Per-prompt mean deltas, a net score, and lists of improvements / stable / regressions. Output as markdown or JSON.

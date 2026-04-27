@@ -6,7 +6,7 @@ import { loadConfig } from '../src/config.js';
 
 function writeTempYaml(content: string): string {
   const dir = mkdtempSync(join(tmpdir(), 'ef-test-'));
-  const path = join(dir, 'evalforge.yaml');
+  const path = join(dir, 'eval-bench.yaml');
   writeFileSync(path, content);
   return path;
 }
@@ -24,7 +24,7 @@ judge:
     expect(cfg.runs.samples).toBe(3);
     expect(cfg.runs.parallel).toBe(2);
     expect(cfg.judge.temperature).toBe(0);
-    expect(cfg.snapshots.dir).toBe('./.evalforge/snapshots');
+    expect(cfg.snapshots.dir).toBe('./.eval-bench/snapshots');
   });
 
   it('rejects invalid judge provider', () => {

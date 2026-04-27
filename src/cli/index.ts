@@ -25,7 +25,7 @@ program
   .option('--baseline <ref>', 'Git ref for baseline')
   .option('--current <ref>', 'Git ref for current', 'HEAD')
   .option('--prompts <file>', 'Prompts file', './prompts.yaml')
-  .option('--config <file>', 'Config file', './evalforge.yaml')
+  .option('--config <file>', 'Config file', './eval-bench.yaml')
   .option('--samples <n>', 'Override samples-per-prompt', (v) => parseInt(v, 10))
   .option('--judge <spec>', 'Override judge, e.g. ollama:qwen2.5:14b')
   .option('--save-as <name>', 'Save snapshot under this name')
@@ -56,10 +56,10 @@ program
 async function snapshotsDir(): Promise<string> {
   try {
     const { loadConfig } = await import('../config.js');
-    const cfg = loadConfig('.evalforge/evalforge.yaml');
+    const cfg = loadConfig('.eval-bench/eval-bench.yaml');
     return cfg.snapshots.dir;
   } catch {
-    return './.evalforge/snapshots';
+    return './.eval-bench/snapshots';
   }
 }
 

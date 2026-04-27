@@ -47,8 +47,8 @@ describe('e2e', () => {
     await execa('git', ['commit', '-m', 'v1', '-q'], { cwd: repo });
 
     const cli = resolve('src/cli/index.ts');
-    const cfg = readFileSync(join(repo, 'evalforge.yaml'), 'utf8').replace('JUDGE_URL', judgeUrl);
-    writeFileSync(join(repo, 'evalforge.yaml'), cfg);
+    const cfg = readFileSync(join(repo, 'eval-bench.yaml'), 'utf8').replace('JUDGE_URL', judgeUrl);
+    writeFileSync(join(repo, 'eval-bench.yaml'), cfg);
 
     const r1 = await execa(
       'npx',

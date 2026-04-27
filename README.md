@@ -51,12 +51,14 @@ Requires:
 - Your plugin in a git repo (required for baseline checkout via `git worktree`)
 - A judge: either Ollama installed locally, or an API key for Anthropic/OpenAI
 
+**Note:** You don't need a full plugin structure—if you only have standalone `skills/*.md` or `agents/*.md` files without `.claude-plugin/plugin.json`, eval-bench will automatically create a temporary minimal plugin manifest for you.
+
 ## Quickstart
 
 ```bash
 cd my-claude-plugin
 eb init
-$EDITOR .evalforge/prompts.yaml   # write 3-5 prompts with rubrics
+$EDITOR .eval-bench/prompts.yaml   # write 3-5 prompts with rubrics
 eb run --baseline v1.0.0 --save-as v1-baseline
 # edit your plugin...
 eb run --baseline v1-baseline --save-as wip --compare v1-baseline
@@ -69,7 +71,7 @@ Full walkthrough: [docs/quickstart.md](docs/quickstart.md).
 
 - [docs/quickstart.md](docs/quickstart.md) — zero to first comparison in ten minutes
 - [docs/concepts.md](docs/concepts.md) — plugin, baseline, variant, sample, judge, rubric, snapshot
-- [docs/config.md](docs/config.md) — every field in `.evalforge/evalforge.yaml` and `.evalforge/prompts.yaml`
+- [docs/config.md](docs/config.md) — every field in `.eval-bench/eval-bench.yaml` and `.eval-bench/prompts.yaml`
 - [docs/rubrics.md](docs/rubrics.md) — how to write rubrics that produce reliable scores
 - [docs/judges.md](docs/judges.md) — picking a judge; local vs hosted tradeoffs; known-good models
 - [docs/ci.md](docs/ci.md) — GitHub Actions, GitLab CI, self-hosted GPU runners

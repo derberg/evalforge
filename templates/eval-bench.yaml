@@ -21,4 +21,4 @@ runs:
   parallel: 2
 
 snapshots:
-  dir: ./.evalforge/snapshots
+  dir: ./.eval-bench/snapshots

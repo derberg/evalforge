@@ -8,8 +8,8 @@ describe('release metadata', () => {
     expect(p.bugs).toBeTruthy();
     expect(p.homepage).toBeTruthy();
   });
-  it('CHANGELOG exists with v0.1.0 entry', () => {
+  it('CHANGELOG exists with v0.2.0 entry', () => {
     const text = readFileSync('CHANGELOG.md', 'utf8');
-    expect(text).toMatch(/0\.1\.0/);
+    expect(text).toMatch(/0\.2\.0/);
   });
 });

@@ -3,5 +3,5 @@
 const args = process.argv.slice(2);
 const promptIdx = args.indexOf('-p');
 const prompt = promptIdx >= 0 ? args[promptIdx + 1] : '';
-console.log(`[PLUGIN_DIR=${process.env.EVALFORGE_PLUGIN_DIR ?? ''}] ${prompt}`);
+console.log(`[PLUGIN_DIR=${process.env.EVAL_BENCH_PLUGIN_DIR ?? ''}] ${prompt}`);
 process.exit(0);

@@ -12,6 +12,6 @@ describe('cli', () => {
 
   it('prints version with --version', async () => {
     const result = await execa('npx', ['tsx', 'src/cli/index.ts', '--version']);
-    expect(result.stdout.trim()).toBe('0.1.0');
+    expect(result.stdout.trim()).toBe('0.2.0');
   });
 });

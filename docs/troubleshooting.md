@@ -6,13 +6,13 @@ eval-bench requires the plugin to be in a git repo because it uses `git worktree
 
 ## "claude CLI not found"
 
-Install Claude Code: `npm i -g @anthropic-ai/claude-code`. Verify with `claude --version`. If you're using a custom path, set `provider.command` in `.evalforge/evalforge.yaml`.
+Install Claude Code: `npm i -g @anthropic-ai/claude-code`. Verify with `claude --version`. If you're using a custom path, set `provider.command` in `.eval-bench/eval-bench.yaml`.
 
 ## "Ollama: connection refused"
 
 Ollama isn't running. Start it: `ollama serve`. Or if installed as a service, `systemctl start ollama` (Linux) — on macOS the installer usually starts it automatically.
 
-Check the endpoint in `.evalforge/evalforge.yaml`. Default Ollama port is `11434`. If you've configured a non-standard port, update the config.
+Check the endpoint in `.eval-bench/eval-bench.yaml`. Default Ollama port is `11434`. If you've configured a non-standard port, update the config.
 
 ## "judge response: could not parse JSON"
 

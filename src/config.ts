@@ -44,7 +44,7 @@ const ConfigSchema = z
       .default({}),
     snapshots: z
       .object({
-        dir: z.string().default('./.evalforge/snapshots'),
+        dir: z.string().default('./.eval-bench/snapshots'),
       })
       .default({}),
   })

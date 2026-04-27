@@ -4,7 +4,7 @@ Run benchmarks on every PR, fail the build if quality regresses, post a markdown
 
 ## GitHub Actions
 
-`eb init --ci` generates `.github/workflows/evalforge.yml`:
+`eb init --ci` generates `.github/workflows/eval-bench.yml`:
 
 ```yaml
 name: eval-bench
@@ -52,7 +52,7 @@ jobs:
         if: always()
         with:
           name: benchmark-results
-          path: .evalforge/snapshots/
+          path: .eval-bench/snapshots/
 ```
 
 Pin actions to a SHA in production per your security policy.
@@ -88,7 +88,7 @@ bench:
     - eval-bench run --baseline origin/main --current HEAD --save-as pr-$CI_MERGE_REQUEST_IID --fail-on-regression 0.05
   artifacts:
     paths:
-      - .evalforge/snapshots/
+      - .eval-bench/snapshots/
   cache:
     paths:
       - ~/.ollama/models
