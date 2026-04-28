@@ -20,7 +20,17 @@ function mkRun(
   variant: 'baseline' | 'current',
   sample: number,
 ): RunResult {
-  return { id, promptId, variant, sample, output: '', durationMs: 1, exitCode: 0, error: null };
+  return {
+    id,
+    promptId,
+    variant,
+    sample,
+    output: '',
+    durationMs: 1,
+    exitCode: 0,
+    error: null,
+    usage: null,
+  };
 }
 
 function mkSnap(

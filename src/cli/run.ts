@@ -106,6 +106,19 @@ export async function runCommand(opts: RunOptions): Promise<number> {
     info(`  baseline mean ${snap.summary.baseline.mean.toFixed(2)} (n=${snap.summary.baseline.n})`);
     info(`  current  mean ${snap.summary.current.mean.toFixed(2)} (n=${snap.summary.current.n})`);
     info(`  delta    ${snap.summary.delta >= 0 ? '+' : ''}${snap.summary.delta.toFixed(2)}`);
+    if (snap.summary.tokens) {
+      const t = snap.summary.tokens;
+      const fmtTok = (n: number): string => n.toLocaleString('en-US');
+      const fmtCost = (n: number): string => `$${n.toFixed(4)}`;
+      const sign = t.costDelta >= 0 ? '+' : '';
+      info(
+        `  baseline tokens in/out ${fmtTok(t.baseline.inputTokens)}/${fmtTok(t.baseline.outputTokens)} cache_read ${fmtTok(t.baseline.cacheReadInputTokens)} cache_create ${fmtTok(t.baseline.cacheCreationInputTokens)} cost ${fmtCost(t.baseline.totalCostUsd)} (n=${t.baseline.reportedRuns})`,
+      );
+      info(
+        `  current  tokens in/out ${fmtTok(t.current.inputTokens)}/${fmtTok(t.current.outputTokens)} cache_read ${fmtTok(t.current.cacheReadInputTokens)} cache_create ${fmtTok(t.current.cacheCreationInputTokens)} cost ${fmtCost(t.current.totalCostUsd)} (n=${t.current.reportedRuns})`,
+      );
+      info(`  cost Δ   ${sign}${fmtCost(t.costDelta)}`);
+    }
     if (opts.compare) {
       const base = await loadSnapshot(cfg.snapshots.dir, opts.compare);
       const cmp = compareSnapshots(base, snap);

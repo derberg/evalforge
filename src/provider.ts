@@ -3,6 +3,7 @@ import { access, mkdir, writeFile, readdir, symlink } from 'node:fs/promises';
 import { join, basename, relative } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
+import type { RunUsage } from './types.js';
 
 export interface InvokeClaudeOptions {
   command: string;
@@ -19,6 +20,46 @@ export interface InvokeClaudeResult {
   exitCode: number;
   durationMs: number;
   error: string | null;
+  usage: RunUsage | null;
+}
+
+interface ClaudeJsonResult {
+  result?: unknown;
+  total_cost_usd?: unknown;
+  usage?: {
+    input_tokens?: unknown;
+    output_tokens?: unknown;
+    cache_read_input_tokens?: unknown;
+    cache_creation_input_tokens?: unknown;
+  };
+}
+
+function num(x: unknown): number {
+  return typeof x === 'number' && Number.isFinite(x) ? x : 0;
+}
+
+// Returns { output, usage } if stdout is a Claude `--output-format json`
+// payload; null if we should fall back to treating raw stdout as output.
+function parseClaudeJson(stdout: string): { output: string; usage: RunUsage } | null {
+  const trimmed = stdout.trim();
+  if (!trimmed.startsWith('{')) return null;
+  let parsed: ClaudeJsonResult;
+  try {
+    parsed = JSON.parse(trimmed) as ClaudeJsonResult;
+  } catch {
+    return null;
+  }
+  if (typeof parsed.result !== 'string' || !parsed.usage) return null;
+  return {
+    output: parsed.result,
+    usage: {
+      inputTokens: num(parsed.usage.input_tokens),
+      outputTokens: num(parsed.usage.output_tokens),
+      cacheReadInputTokens: num(parsed.usage.cache_read_input_tokens),
+      cacheCreationInputTokens: num(parsed.usage.cache_creation_input_tokens),
+      totalCostUsd: num(parsed.total_cost_usd),
+    },
+  };
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -128,8 +169,16 @@ export async function invokeClaude(opts: InvokeClaudeOptions): Promise<InvokeCla
   const tempSetup = await setupTempPlugin(opts.pluginDir);
   const effectivePluginDir = tempSetup?.tempDir ?? opts.pluginDir;
 
+  // Auto-inject `--output-format json` so we can capture token usage. If the
+  // user already specified an output format, respect their choice and accept
+  // that we won't get usage data from this run.
+  const userSpecifiedFormat = opts.extraArgs.some(
+    (a) => a === '--output-format' || a.startsWith('--output-format='),
+  );
+  const formatArgs = userSpecifiedFormat ? [] : ['--output-format', 'json'];
+
   try {
-    const args = [...opts.extraArgs, '-p', opts.prompt];
+    const args = [...opts.extraArgs, ...formatArgs, '-p', opts.prompt];
     if (opts.model) {
       args.push('--model', opts.model);
     }
@@ -147,9 +196,14 @@ export async function invokeClaude(opts: InvokeClaudeOptions): Promise<InvokeCla
         },
       });
       const durationMs = Date.now() - started;
-      const output = [result.stdout, result.stderr].filter(Boolean).join('\n');
+      const rawStdout = result.stdout ?? '';
+      const parsed = parseClaudeJson(rawStdout);
+      const output = parsed
+        ? parsed.output
+        : [rawStdout, result.stderr].filter(Boolean).join('\n');
+      const usage = parsed?.usage ?? null;
       if (result.timedOut) {
-        return { output, exitCode: result.exitCode ?? -1, durationMs, error: 'timed out' };
+        return { output, exitCode: result.exitCode ?? -1, durationMs, error: 'timed out', usage };
       }
       if (result.exitCode !== 0) {
         return {
@@ -157,13 +211,14 @@ export async function invokeClaude(opts: InvokeClaudeOptions): Promise<InvokeCla
           exitCode: result.exitCode ?? -1,
           durationMs,
           error: result.stderr || 'non-zero exit',
+          usage,
         };
       }
-      return { output, exitCode: 0, durationMs, error: null };
+      return { output, exitCode: 0, durationMs, error: null, usage };
     } catch (err) {
       const durationMs = Date.now() - started;
       const msg = err instanceof Error ? err.message : String(err);
-      return { output: '', exitCode: -1, durationMs, error: msg };
+      return { output: '', exitCode: -1, durationMs, error: msg, usage: null };
     }
   } finally {
     // Clean up temp plugin if it was created

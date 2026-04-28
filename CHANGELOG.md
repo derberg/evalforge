@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.4.0 — 2026-04-28
+
+**Features:**
+
+- **Per-run token & cost tracking** — `eb run` now captures `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, and `total_cost_usd` for every Claude invocation by auto-injecting `--output-format json`. Each `RunResult` carries a `usage` block, and `Snapshot.summary.tokens` aggregates baseline vs current totals plus a `costDelta` so you can see how much a plugin/skill change costs in tokens, not just in scores.
+- **Token totals in run summary & HTML view** — The end-of-run summary prints baseline/current input·output·cache·cost lines and a `cost Δ`. The `eb view` HTML shows per-cell `in / out / $cost` under each score and a totals line in the header.
+
+**Schema:**
+
+- `RunResult.usage: RunUsage | null` — populated when the provider returns a Claude `--output-format json` envelope; `null` for custom commands or older transcripts. New `RunUsage` interface exported from `types.ts`.
+- `Snapshot.summary.tokens?: { baseline: TokenTotals; current: TokenTotals; costDelta: number }` — absent when no run reported usage (e.g. all runs used a non-Claude provider). Old snapshots load unchanged.
+
+**Compatibility:**
+
+- If `provider.extraArgs` already specifies `--output-format`, the user's choice is respected and usage capture is skipped for that run.
+- Non-JSON stdout falls back to the previous behavior (raw stdout becomes `output`, `usage` is `null`) — custom provider commands keep working.
+
 ## 0.3.0 — 2026-04-28
 
 **Features:**

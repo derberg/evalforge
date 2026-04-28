@@ -6,6 +6,7 @@ import type {
   Judgment,
   Snapshot,
   SummaryStats,
+  TokenTotals,
 } from './types.js';
 import { invokeClaude } from './provider.js';
 import { judge, judgeConfigFromConfig, type JudgeConfig } from './judges/index.js';
@@ -87,6 +88,27 @@ function stats(xs: number[]): SummaryStats {
   return { n: xs.length, mean, median, variance };
 }
 
+function tokenTotals(runs: RunResult[]): TokenTotals {
+  const totals: TokenTotals = {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    totalCostUsd: 0,
+    reportedRuns: 0,
+  };
+  for (const r of runs) {
+    if (!r.usage) continue;
+    totals.inputTokens += r.usage.inputTokens;
+    totals.outputTokens += r.usage.outputTokens;
+    totals.cacheReadInputTokens += r.usage.cacheReadInputTokens;
+    totals.cacheCreationInputTokens += r.usage.cacheCreationInputTokens;
+    totals.totalCostUsd += r.usage.totalCostUsd;
+    totals.reportedRuns += 1;
+  }
+  return totals;
+}
+
 function buildSnapshot(
   opts: RunBenchmarkOptions,
   runs: RunResult[],
@@ -101,6 +123,13 @@ function buildSnapshot(
   const currentScores = runs.filter((r) => r.variant === 'current').map((r) => scoreOf(r.id));
   const baseline = stats(baselineScores);
   const current = stats(currentScores);
+  const baselineRuns = runs.filter((r) => r.variant === 'baseline');
+  const currentRuns = runs.filter((r) => r.variant === 'current');
+  const baselineTokens = tokenTotals(baselineRuns);
+  const currentTokens = tokenTotals(currentRuns);
+  // Only attach the tokens block if at least one run reported usage —
+  // keeps snapshots tidy for non-Claude-CLI providers.
+  const anyUsage = baselineTokens.reportedRuns > 0 || currentTokens.reportedRuns > 0;
   return {
     schemaVersion: 1,
     name: opts.name,
@@ -117,7 +146,18 @@ function buildSnapshot(
     prompts: opts.prompts,
     runs,
     judgments,
-    summary: { baseline, current, delta: current.mean - baseline.mean },
+    summary: {
+      baseline,
+      current,
+      delta: current.mean - baseline.mean,
+      ...(anyUsage && {
+        tokens: {
+          baseline: baselineTokens,
+          current: currentTokens,
+          costDelta: currentTokens.totalCostUsd - baselineTokens.totalCostUsd,
+        },
+      }),
+    },
     complete,
   };
 }
@@ -198,6 +238,7 @@ async function runAndJudge(
     durationMs: r.durationMs,
     exitCode: r.exitCode,
     error: r.error,
+    usage: r.usage,
   };
   const judgment = await judgeRun(row, run, judgeCfg, opts.onProgress);
   return { run, judgment };

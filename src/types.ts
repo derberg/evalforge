@@ -44,6 +44,14 @@ export interface PromptSpec {
 
 export type Variant = 'baseline' | 'current';
 
+export interface RunUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  totalCostUsd: number;
+}
+
 export interface RunResult {
   id: string;
   promptId: string;
@@ -53,6 +61,19 @@ export interface RunResult {
   durationMs: number;
   exitCode: number;
   error: string | null;
+  // Null when the provider didn't return parseable JSON usage (e.g. custom
+  // command, older snapshots loaded from disk).
+  usage: RunUsage | null;
+}
+
+export interface TokenTotals {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  totalCostUsd: number;
+  // How many runs in this variant reported usage. If < n, totals are partial.
+  reportedRuns: number;
 }
 
 export interface Judgment {
@@ -99,6 +120,12 @@ export interface Snapshot {
     baseline: SummaryStats;
     current: SummaryStats;
     delta: number;
+    tokens?: {
+      baseline: TokenTotals;
+      current: TokenTotals;
+      // current.totalCostUsd - baseline.totalCostUsd
+      costDelta: number;
+    };
   };
   // Absent on legacy snapshots; treat as complete when loading.
   complete?: boolean;
