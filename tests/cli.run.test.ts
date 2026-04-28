@@ -54,7 +54,19 @@ describe('ef run', () => {
     const cliPath = resolve('src/cli/index.ts');
     const { exitCode, stdout } = await execa(
       'npx',
-      ['tsx', cliPath, 'run', '--baseline', 'v1', '--save-as', 'r1'],
+      [
+        'tsx',
+        cliPath,
+        'run',
+        '--baseline',
+        'v1',
+        '--save-as',
+        'r1',
+        '--config',
+        'eval-bench.yaml',
+        '--prompts',
+        'prompts.yaml',
+      ],
       { cwd: repo, reject: false },
     );
     expect(exitCode).toBe(0);

@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.1 — 2026-04-28
+
+**Fixes:**
+
+- `eb run` no longer fails with `ENOENT: no such file or directory, open './eval-bench.yaml'` when invoked from a project root that has the scaffolded `.eval-bench/` directory. The `--config` and `--prompts` defaults now point at `./.eval-bench/eval-bench.yaml` and `./.eval-bench/prompts.yaml` to match what `eb init` writes.
+
+**Docs:**
+
+- README quickstart commands annotated with what each step does and where its output lands.
+
 ## 0.2.0 — 2026-04-27
 
 **Features:**

@@ -52,7 +52,19 @@ describe('e2e', () => {
 
     const r1 = await execa(
       'npx',
-      ['tsx', cli, 'run', '--baseline', 'HEAD', '--save-as', 'v1-baseline'],
+      [
+        'tsx',
+        cli,
+        'run',
+        '--baseline',
+        'HEAD',
+        '--save-as',
+        'v1-baseline',
+        '--config',
+        'eval-bench.yaml',
+        '--prompts',
+        'prompts.yaml',
+      ],
       { cwd: repo, reject: false },
     );
     expect(r1.exitCode).toBe(0);
@@ -79,6 +91,10 @@ describe('e2e', () => {
         'v2',
         '--compare',
         'v1-baseline',
+        '--config',
+        'eval-bench.yaml',
+        '--prompts',
+        'prompts.yaml',
       ],
       { cwd: repo, reject: false },
     );

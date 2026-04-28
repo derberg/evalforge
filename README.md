@@ -57,11 +57,24 @@ Requires:
 
 ```bash
 cd my-claude-plugin
+
+# Create .eval-bench/ with config, prompts template, and snapshots directory
 eb init
-$EDITOR .eval-bench/prompts.yaml   # write 3-5 prompts with rubrics
+
+# Edit prompts.yaml with evaluation tests for your plugin
+$EDITOR .eval-bench/prompts.yaml
+
+# Run prompts against v1.0.0 (baseline) and HEAD (current), save results
+# This creates .eval-bench/snapshots/v1-baseline.json with scores + outputs
 eb run --baseline v1.0.0 --save-as v1-baseline
-# edit your plugin...
+
+# Make changes to your plugin...
+
+# Compare new version against saved v1-baseline results
+# Reuses v1.0.0 results, only runs HEAD with your changes
 eb run --baseline v1-baseline --save-as wip --compare v1-baseline
+
+# Open side-by-side comparison in browser
 eb view wip
 ```
 
