@@ -63,6 +63,10 @@ export interface Judgment {
   judgeProvider: JudgeProvider;
   judgeModel: string;
   raw: string;
+  // null = succeeded; string = judge threw with this message.
+  // Set to "run failed" when the underlying Claude run produced no output.
+  // Resume retries judgments where this is set (and run.output exists).
+  error: string | null;
 }
 
 export interface SummaryStats {
@@ -96,6 +100,8 @@ export interface Snapshot {
     current: SummaryStats;
     delta: number;
   };
+  // Absent on legacy snapshots; treat as complete when loading.
+  complete?: boolean;
 }
 
 export interface PromptDelta {

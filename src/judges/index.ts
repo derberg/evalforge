@@ -120,6 +120,7 @@ export async function judge(
     judgeProvider: cfg.provider,
     judgeModel: cfg.model,
     raw: res.raw,
+    error: null,
   };
 }
 

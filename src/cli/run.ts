@@ -4,8 +4,8 @@ import { runBenchmark } from '../run.js';
 import { saveSnapshot, loadSnapshot } from '../snapshot.js';
 import { createWorktree, resolveSha } from '../swap.js';
 import { compareSnapshots, formatComparisonMarkdown } from '../compare.js';
-import { info, ok, err, progress } from '../logger.js';
-import type { Config } from '../types.js';
+import { info, ok, warn, err, progress } from '../logger.js';
+import type { Config, Snapshot } from '../types.js';
 
 export interface RunOptions {
   cwd: string;
@@ -58,11 +58,27 @@ export async function runCommand(opts: RunOptions): Promise<number> {
 
   const baselineSha = await resolveSha(gitRoot, baselineRef);
   const currentSha = await resolveSha(gitRoot, currentRef);
+
+  let resume: Snapshot | null = null;
+  try {
+    const existing = await loadSnapshot(cfg.snapshots.dir, name);
+    if (existing.complete === false) {
+      resume = existing;
+      info(
+        `Resuming from partial snapshot: ${existing.runs.length} runs, ${existing.judgments.length} judgments already done`,
+      );
+    } else {
+      warn(`Snapshot "${name}" already exists and is complete; will overwrite`);
+    }
+  } catch {
+    // no existing snapshot — fresh run
+  }
+
   const baselineWt = await createWorktree(gitRoot, baselineRef);
 
   try {
-    let runIdx = 0;
     const total = prompts.length * cfg.runs.samples * 2;
+    let runIdx = resume?.runs.length ?? 0;
     const snap = await runBenchmark({
       config: cfg,
       prompts,
@@ -73,6 +89,10 @@ export async function runCommand(opts: RunOptions): Promise<number> {
       currentRef,
       currentSha,
       name,
+      resume,
+      onCheckpoint: async (partial) => {
+        await saveSnapshot(partial, cfg.snapshots.dir);
+      },
       onProgress: (ev) => {
         if (ev.kind === 'run-end') {
           runIdx++;

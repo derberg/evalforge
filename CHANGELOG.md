@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.0 — 2026-04-28
+
+**Features:**
+
+- **Incremental snapshots & resume** — `eb run` now writes the snapshot to disk after every prompt × judge pair instead of only at the end. If the process crashes mid-run (judge timeout, ^C, OOM), all completed work is preserved. Re-running `eb run --save-as <name>` with the same name picks up where it left off; finished rows are skipped.
+- **Judge errors no longer kill the batch** — A throwing judge for one prompt used to abort the whole run via `Promise.all` and lose every prior result. Now the failure is caught, recorded as `score: 0` with `rationale: "judge failed: ..."`, and the rest of the matrix continues.
+- **Smart resume retries failed judgments only** — On resume, rows whose Claude run succeeded but whose judge errored are re-judged using the cached run output (cheap, no Claude re-invocation). Successful rows are skipped; rows where the Claude run itself failed are also skipped (re-running is expensive and likely to fail again — delete the snapshot to force a full retry).
+
+**Schema:**
+
+- `Snapshot.complete?: boolean` — `false` while a run is in progress, `true` once finished. Absent on legacy snapshots, treated as complete when loading.
+- `Judgment.error: string | null` — `null` on success, error message when the judge threw, or `"run failed"` when the underlying Claude run produced no output. Used by resume to classify retry behavior.
+
 ## 0.2.3 — 2026-04-28
 
 **Fixes:**
