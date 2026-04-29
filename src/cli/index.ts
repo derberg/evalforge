@@ -23,10 +23,19 @@ program
   .description('Run a benchmark against the plugin.')
   .option('--plugin <path>', 'Path to plugin')
   .option('--baseline <ref>', 'Git ref for baseline')
+  .option('--baseline-from <name>', 'Reuse baseline runs from a saved snapshot instead of regenerating them')
   .option('--current <ref>', 'Git ref for current', 'HEAD')
   .option('--prompts <file>', 'Prompts file', './.eval-bench/prompts.yaml')
   .option('--config <file>', 'Config file', './.eval-bench/eval-bench.yaml')
   .option('--samples <n>', 'Override samples-per-prompt', (v) => parseInt(v, 10))
+  .option(
+    '--only <ids>',
+    'Run only these prompt ids (comma-separated, repeatable)',
+    (v: string, prev?: string[]) => {
+      const next = v.split(',').map((s) => s.trim()).filter(Boolean);
+      return prev ? [...prev, ...next] : next;
+    },
+  )
   .option('--judge <spec>', 'Override judge, e.g. ollama:qwen2.5:14b')
   .option('--save-as <name>', 'Save snapshot under this name')
   .option('--compare <name>', 'After running, compare against this snapshot')
@@ -39,16 +48,54 @@ program
       cwd: process.cwd(),
       plugin: opts.plugin,
       baseline: opts.baseline,
+      baselineFrom: opts.baselineFrom,
       current: opts.current,
       prompts: opts.prompts,
       config: opts.config,
       samples: opts.samples,
+      only: opts.only,
       judge: opts.judge,
       saveAs: opts.saveAs,
       compare: opts.compare,
       failOnRegression: opts.failOnRegression,
       dryRun: opts.dryRun,
       verbose: opts.verbose,
+    });
+    process.exit(code);
+  });
+
+program
+  .command('eval')
+  .description('Run the eval matrix at a single ref and save a snapshot. Pair with `eb compare` to diff snapshots.')
+  .requiredOption('--save-as <name>', 'Save snapshot under this name')
+  .option('--ref <ref>', 'Git ref to evaluate', 'HEAD')
+  .option('--plugin <path>', 'Path to plugin')
+  .option('--prompts <file>', 'Prompts file', './.eval-bench/prompts.yaml')
+  .option('--config <file>', 'Config file', './.eval-bench/eval-bench.yaml')
+  .option('--judge <spec>', 'Override judge, e.g. ollama:qwen2.5:14b')
+  .option('--force', 'Overwrite an existing complete snapshot with the same name')
+  .option(
+    '--only <ids>',
+    'Run only these prompt ids (comma-separated, repeatable)',
+    (v: string, prev?: string[]) => {
+      const next = v.split(',').map((s) => s.trim()).filter(Boolean);
+      return prev ? [...prev, ...next] : next;
+    },
+  )
+  .option('--dry-run', 'Print planned matrix without running')
+  .action(async (opts) => {
+    const { evalCommand } = await import('./eval.js');
+    const code = await evalCommand({
+      cwd: process.cwd(),
+      plugin: opts.plugin,
+      ref: opts.ref,
+      prompts: opts.prompts,
+      config: opts.config,
+      judge: opts.judge,
+      saveAs: opts.saveAs,
+      force: Boolean(opts.force),
+      only: opts.only,
+      dryRun: opts.dryRun,
     });
     process.exit(code);
   });

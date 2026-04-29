@@ -70,6 +70,22 @@ Add a step that emits to `$GITHUB_STEP_SUMMARY`:
 
 This requires you to have published a `main-baseline` snapshot (e.g. via a nightly cron job) and committed it to git.
 
+## Reusing a committed baseline (faster PR runs)
+
+If you commit a baseline snapshot (e.g. via a nightly job that runs `eb eval --ref origin/main --save-as main-baseline --force`), PR runs can reuse it instead of re-running `main` every time:
+
+```yaml
+- run: |
+    npx eval-bench run \
+      --baseline-from main-baseline \
+      --current HEAD \
+      --save-as pr-${{ github.event.pull_request.number }} \
+      --compare main-baseline \
+      --fail-on-regression 0.1
+```
+
+The PR run executes only the current side; the baseline side is read from the committed snapshot. Cuts CI time roughly in half. You're trading off freshness — the baseline reflects whatever `main` was when the nightly ran, not the PR's actual merge target. For most plugins that's fine; if you need merge-target precision, stick with the two-ref form.
+
 ## Caching the Ollama judge model
 
 Pulling a 14B Q4 model (~5 GB) every PR is wasteful. Use `actions/cache` with key tied to the model name. First run pulls and caches; subsequent runs are instant.

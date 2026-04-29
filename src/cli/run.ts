@@ -1,20 +1,22 @@
 import { loadConfig } from '../config.js';
-import { loadPrompts } from '../prompts.js';
+import { loadPrompts, filterPrompts } from '../prompts.js';
 import { runBenchmark } from '../run.js';
 import { saveSnapshot, loadSnapshot } from '../snapshot.js';
 import { createWorktree, resolveSha } from '../swap.js';
 import { compareSnapshots, formatComparisonMarkdown } from '../compare.js';
 import { info, ok, warn, err, progress } from '../logger.js';
-import type { Config, Snapshot } from '../types.js';
+import type { Config, Snapshot, RunResult, Judgment } from '../types.js';
 
 export interface RunOptions {
   cwd: string;
   plugin?: string;
   baseline?: string;
+  baselineFrom?: string;
   current?: string;
   prompts?: string;
   config?: string;
   samples?: number;
+  only?: string[];
   judge?: string;
   saveAs?: string;
   compare?: string;
@@ -38,26 +40,78 @@ function applyOverrides(cfg: Config, opts: RunOptions): Config {
 }
 
 export async function runCommand(opts: RunOptions): Promise<number> {
+  if (opts.baselineFrom && opts.baseline) {
+    err('--baseline-from and --baseline are mutually exclusive');
+    return 1;
+  }
   const configPath = opts.config ?? '.eval-bench/eval-bench.yaml';
   const promptsPath = opts.prompts ?? '.eval-bench/prompts.yaml';
   const cfg = applyOverrides(loadConfig(configPath), opts);
-  const prompts = loadPrompts(promptsPath);
+  const allPrompts = loadPrompts(promptsPath);
+  const prompts = opts.only?.length ? filterPrompts(allPrompts, opts.only) : allPrompts;
   const gitRoot = cfg.plugin.gitRoot;
-  const baselineRef = opts.baseline ?? 'HEAD~1';
   const currentRef = opts.current ?? 'HEAD';
   const name = opts.saveAs ?? new Date().toISOString().replace(/[:.]/g, '-');
 
+  let baselineRef: string;
+  let baselineSha: string;
+  let cachedBaseline: {
+    runs: RunResult[];
+    judgments: Judgment[];
+    sourceName: string;
+  } | null = null;
+
+  if (opts.baselineFrom) {
+    const cached = await loadSnapshot(cfg.snapshots.dir, opts.baselineFrom);
+    baselineRef = cached.plugin.currentRef || cached.plugin.baselineRef;
+    baselineSha = cached.plugin.currentSha || cached.plugin.baselineSha;
+    // Pull successful current-variant runs within the requested sample budget,
+    // restricted to the prompts we'll actually evaluate this run.
+    const wantPromptIds = new Set(prompts.map((p) => p.id));
+    const sourceRuns = cached.runs.filter(
+      (r) =>
+        r.variant === 'current' &&
+        wantPromptIds.has(r.promptId) &&
+        r.sample <= cfg.runs.samples &&
+        r.error === null &&
+        r.output.length > 0,
+    );
+    const sourceRunIds = new Set(sourceRuns.map((r) => r.id));
+    const sourceJudgments = cached.judgments.filter((j) => sourceRunIds.has(j.runId));
+    const idMap = new Map<string, string>();
+    const runs: RunResult[] = sourceRuns.map((r) => {
+      const newId = `${r.promptId}::baseline::${r.sample}`;
+      idMap.set(r.id, newId);
+      return { ...r, id: newId, variant: 'baseline' };
+    });
+    const judgments: Judgment[] = sourceJudgments.map((j) => ({
+      ...j,
+      runId: idMap.get(j.runId) ?? j.runId,
+    }));
+    cachedBaseline = { runs, judgments, sourceName: opts.baselineFrom };
+  } else {
+    baselineRef = opts.baseline ?? 'HEAD~1';
+    baselineSha = await resolveSha(gitRoot, baselineRef);
+  }
+  const currentSha = await resolveSha(gitRoot, currentRef);
+
   info(`Plugin:   ${cfg.plugin.path}`);
-  info(`Baseline: ${baselineRef}`);
+  if (opts.only?.length) {
+    info(`Prompts:  ${prompts.length}/${allPrompts.length} (filtered: ${prompts.map((p) => p.id).join(', ')})`);
+  }
+  if (cachedBaseline) {
+    info(
+      `Baseline: ${baselineRef} (cached from snapshot "${cachedBaseline.sourceName}", sha=${baselineSha.slice(0, 8)}, ${cachedBaseline.runs.length} runs reused)`,
+    );
+  } else {
+    info(`Baseline: ${baselineRef}`);
+  }
   info(`Current:  ${currentRef}`);
   info(`Judge:    ${cfg.judge.provider}/${cfg.judge.model}`);
   info(
     `Matrix:   ${prompts.length} prompts × ${cfg.runs.samples} samples × 2 variants = ${prompts.length * cfg.runs.samples * 2} runs`,
   );
   if (opts.dryRun) return 0;
-
-  const baselineSha = await resolveSha(gitRoot, baselineRef);
-  const currentSha = await resolveSha(gitRoot, currentRef);
 
   let resume: Snapshot | null = null;
   try {
@@ -74,7 +128,48 @@ export async function runCommand(opts: RunOptions): Promise<number> {
     // no existing snapshot — fresh run
   }
 
-  const baselineWt = await createWorktree(gitRoot, baselineRef);
+  if (cachedBaseline) {
+    // Inject cached baseline runs/judgments into the resume bag — runBenchmark
+    // dedups by row ID, so they're skipped instead of re-executed.
+    if (resume) {
+      const haveRunIds = new Set(resume.runs.map((r) => r.id));
+      const haveJudgmentRunIds = new Set(resume.judgments.map((j) => j.runId));
+      resume = {
+        ...resume,
+        runs: [...resume.runs, ...cachedBaseline.runs.filter((r) => !haveRunIds.has(r.id))],
+        judgments: [
+          ...resume.judgments,
+          ...cachedBaseline.judgments.filter((j) => !haveJudgmentRunIds.has(j.runId)),
+        ],
+      };
+    } else {
+      resume = {
+        schemaVersion: 1,
+        name,
+        createdAt: new Date().toISOString(),
+        plugin: {
+          path: cfg.plugin.path,
+          baselineRef,
+          baselineSha,
+          currentRef,
+          currentSha,
+        },
+        config: cfg,
+        judge: { provider: cfg.judge.provider, model: cfg.judge.model },
+        prompts,
+        runs: cachedBaseline.runs,
+        judgments: cachedBaseline.judgments,
+        summary: {
+          baseline: { n: 0, mean: 0, median: 0, variance: 0 },
+          current: { n: 0, mean: 0, median: 0, variance: 0 },
+          delta: 0,
+        },
+        complete: false,
+      };
+    }
+  }
+
+  const baselineWt = cachedBaseline ? null : await createWorktree(gitRoot, baselineRef);
 
   try {
     const total = prompts.length * cfg.runs.samples * 2;
@@ -82,7 +177,7 @@ export async function runCommand(opts: RunOptions): Promise<number> {
     const snap = await runBenchmark({
       config: cfg,
       prompts,
-      baselinePluginDir: baselineWt.path,
+      baselinePluginDir: baselineWt?.path ?? '',
       currentPluginDir: gitRoot,
       baselineRef,
       baselineSha,
@@ -131,6 +226,6 @@ export async function runCommand(opts: RunOptions): Promise<number> {
     }
     return 0;
   } finally {
-    await baselineWt.cleanup();
+    if (baselineWt) await baselineWt.cleanup();
   }
 }

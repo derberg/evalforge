@@ -24,6 +24,7 @@ sequenceDiagram
         ef->>claude: spawn with plugin dir + prompt
         claude-->>ef: stdout
     end
+    Note right of ef: with --baseline-from <name>,<br/>baseline runs are reused<br/>from a saved snapshot
 
     Note over ef,judge: Judge phase (parallel)
     loop each run
@@ -58,25 +59,28 @@ Requires:
 ```bash
 cd my-claude-plugin
 
-# Create .eval-bench/ with config, prompts template, and snapshots directory
+# scaffold .eval-bench/ (config, prompts template, snapshots dir)
 eb init
 
-# Edit prompts.yaml with evaluation tests for your plugin
+# write your eval prompts and rubrics
 $EDITOR .eval-bench/prompts.yaml
 
-# Run prompts against v1.0.0 (baseline) and HEAD (current), save results
-# This creates .eval-bench/snapshots/v1-baseline.json with scores + outputs
-eb run --baseline v1.0.0 --save-as v1-baseline
+# freeze a reference snapshot at v1.0.0 — runs the matrix once at one ref
+eb eval --ref v1.0.0 --save-as v1-baseline
 
-# Make changes to your plugin...
+# make changes to your plugin...
 
-# Compare new version against saved v1-baseline results
-# Reuses v1.0.0 results, only runs HEAD with your changes
-eb run --baseline v1-baseline --save-as wip --compare v1-baseline
+# diff your changes against the saved baseline; only the current side runs
+eb run --baseline-from v1-baseline --save-as wip --compare v1-baseline
 
-# Open side-by-side comparison in browser
+# narrow the matrix to one or a few prompts while iterating on a rubric
+eb run --baseline-from v1-baseline --save-as wip --only find-user-by-email
+
+# side-by-side outputs in the browser
 eb view wip
 ```
+
+`eb eval` produces a single-variant snapshot (one ref). `eb run --baseline-from <name>` reuses it instead of regenerating the baseline side, so each iteration only pays for the current ref. `--only <ids>` (comma-separated, repeatable) restricts the matrix to specific prompt ids — useful when iterating on one rubric. Plain `eb run --baseline <ref> --current <ref>` still works when you want to A/B two refs in one shot (CI gating).
 
 Full walkthrough: [docs/quickstart.md](docs/quickstart.md).
 

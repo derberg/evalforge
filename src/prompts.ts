@@ -24,3 +24,15 @@ export function loadPrompts(path: string): PromptSpec[] {
   }
   return prompts;
 }
+
+export function filterPrompts(prompts: PromptSpec[], ids: string[]): PromptSpec[] {
+  const known = new Set(prompts.map((p) => p.id));
+  const missing = ids.filter((id) => !known.has(id));
+  if (missing.length) {
+    throw new Error(
+      `unknown prompt id(s): ${missing.join(', ')}. Available: ${prompts.map((p) => p.id).join(', ')}`,
+    );
+  }
+  const want = new Set(ids);
+  return prompts.filter((p) => want.has(p.id));
+}

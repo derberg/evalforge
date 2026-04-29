@@ -52,6 +52,30 @@ judge:
   apiKeyEnv: MY_CUSTOM_ANTHROPIC_VAR
 ```
 
+## Mid-run crash, ^C, or judge timeout — what happens when I re-run?
+
+`eb run` and `eb eval` write the snapshot to disk after every prompt × judge pair, so completed work survives a crash. The on-disk file carries a `complete: false` flag while a run is in progress.
+
+**Re-run with the same `--save-as <name>`:** picks up where it left off. You'll see:
+
+```
+Resuming from partial snapshot: 12 runs, 12 judgments already done
+```
+
+The matrix is rebuilt and three things happen:
+
+1. **Fully successful rows** (Claude run + judge both succeeded) — skipped.
+2. **Run succeeded, judge errored** — re-judged using the cached run output (cheap, no Claude re-invocation). This is also how `eb run` recovers from a `judge response: could not parse JSON` failure on one prompt without re-running the others.
+3. **Run itself failed** (timeout, non-zero exit, empty output) — *not* retried automatically. Re-running an expensive Claude call that already failed is rarely useful; if it was a transient blip, delete the partial snapshot first to force a full retry: `eb snapshot rm <name>`.
+
+**Re-run against a different `--save-as <name>`:** starts fresh. The previous partial snapshot is left untouched on disk.
+
+**`eb run` against an existing *complete* snapshot:** warns and overwrites in place.
+
+**`eb eval` against an existing *complete* snapshot:** errors out and tells you to pass `--force`. Different default because an `eb eval` snapshot is usually a frozen reference (`v1-baseline` etc.) and silently clobbering one is a foot-gun.
+
+**`eb run --baseline-from <name>`** loads `<name>`'s runs into the new snapshot's baseline slot at startup. If the new snapshot's name later resumes, those baseline rows are already on disk in the partial snapshot — the cache load is idempotent.
+
 ## Worktree cleanup left a directory in /tmp
 
 If the tool crashes mid-run, the temp worktree may not get cleaned up. Run `git worktree prune` in your plugin repo and `rm -rf /tmp/ef-wt-*`.

@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.5.0 — 2026-04-29
+
+**Features:**
+
+- **`eb eval` — single-variant snapshots.** Runs the eval matrix at one git ref and saves a snapshot. Use it to freeze a reference point ("baseline") without paying for a redundant second variant. Refuses to overwrite a complete snapshot of the same name unless `--force` is passed; the error message tells you which flag to add. `--ref` defaults to `HEAD`. Samples come from your config (no override).
+- **`eb run --baseline-from <snapshot>`.** Reuses the runs and judgments from a saved snapshot for the baseline side instead of re-executing the baseline ref. Re-labels the cached snapshot's `current`-variant rows as `baseline`-variant in the new snapshot, then only the current ref actually runs. Logs `Baseline: <ref> (cached from snapshot "<name>", sha=<sha>, <N> runs reused)` on hit. Mutually exclusive with `--baseline <ref>`; passing both is a hard error.
+- **`--only <ids>` on `eb run` and `eb eval`.** Restrict the matrix to a subset of prompts by id. Comma-separated and repeatable (`--only p1,p2 --only p3`). Unknown ids fail loudly. With `--baseline-from`, cached baseline runs are filtered to the same prompt set so the saved snapshot stays internally consistent.
+
+**Workflow shift:**
+
+- Iteration loop is now `eb eval` once → `eb run --baseline-from <name>` per change. The original two-ref `eb run --baseline <ref> --current <ref>` is still the right shape for one-shot comparisons (e.g. CI gating two refs in one command).
+
+**Schema:**
+
+- No schema bump. Single-variant snapshots reuse the existing schema with `summary.baseline.n === 0` and empty `plugin.baselineRef`/`baselineSha`. Old readers (compare, view) keep working unchanged.
+
 ## 0.4.0 — 2026-04-28
 
 **Features:**

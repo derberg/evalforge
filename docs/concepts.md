@@ -12,11 +12,11 @@
 
 **Hook** — a script that fires on a Claude Code lifecycle event (pre-tool, post-tool, session start/end). Can read and rewrite tool calls or prompts.
 
-**Baseline** — the plugin version you are comparing *against*. Usually a tag or commit SHA (e.g. `v1.0.0`, `origin/main`). Resolved via `git rev-parse` and checked out into a temporary worktree.
+**Baseline** — the plugin version you are comparing *against*. Usually a tag or commit SHA (e.g. `v1.0.0`, `origin/main`). With `eb run`, resolved via `git rev-parse` and checked out into a temporary worktree. With `eb run --baseline-from <snapshot>`, the baseline side is loaded from a previously saved snapshot — no rerun, no worktree.
 
 **Current** — the plugin version you are comparing. Defaults to `HEAD` (your working tree).
 
-**Variant** — either `baseline` or `current`. Each prompt is run against both.
+**Variant** — either `baseline` or `current`. `eb run` produces both. `eb eval` produces a single-variant snapshot (`current`-labeled internally; the baseline slot stays empty until you compare against it).
 
 **Sample** — one execution of one prompt against one variant. `samples: 3` means each prompt is run 3 times per variant so we can measure variance (noise) in the judge scoring.
 
@@ -24,6 +24,6 @@
 
 **Rubric** — per-prompt grading criteria. Write a specific, checklist-style rubric; vague rubrics produce noisy judge scores. See [rubrics.md](rubrics.md).
 
-**Snapshot** — the saved result of an `eb run`. JSON file at `.eval-bench/snapshots/<name>/snapshot.json`. Contains the prompts, every run's output, every judgment, and summary statistics. Commit them to git if you want a historical record.
+**Snapshot** — the saved result of an `eb run` or `eb eval`. JSON file at `.eval-bench/snapshots/<name>/snapshot.json`. Contains the prompts, every run's output, every judgment, and summary statistics. Commit them to git if you want a historical record. Two-variant snapshots come from `eb run`; single-variant snapshots come from `eb eval` (or from `eb run --baseline-from`, which embeds a re-labeled copy of the cached snapshot's runs into the baseline slot of the new snapshot).
 
-**Comparison** — the diff between two snapshots. Per-prompt mean deltas, a net score, and lists of improvements / stable / regressions. Output as markdown or JSON.
+**Comparison** — the diff between two snapshots. Per-prompt mean deltas, a net score, and lists of improvements / stable / regressions. Output as markdown or JSON. Compare always reads each snapshot's `current`-variant scores, so a single-variant `eb eval` snapshot can be compared against any other snapshot.

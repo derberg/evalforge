@@ -21,9 +21,12 @@ export interface MatrixRow {
   sample: number;
 }
 
-export function expandMatrix(prompts: PromptSpec[], samples: number): MatrixRow[] {
+export function expandMatrix(
+  prompts: PromptSpec[],
+  samples: number,
+  variants: Variant[] = ['baseline', 'current'],
+): MatrixRow[] {
   const rows: MatrixRow[] = [];
-  const variants: Variant[] = ['baseline', 'current'];
   for (const p of prompts) {
     for (const v of variants) {
       for (let s = 1; s <= samples; s++) {
@@ -51,6 +54,10 @@ export interface RunBenchmarkOptions {
   currentRef: string;
   currentSha: string;
   name: string;
+  // Restrict the matrix. Defaults to both variants. Use ['current'] for a
+  // solo/baseline snapshot — baselinePluginDir/Ref/Sha can be empty strings
+  // since they're never read when 'baseline' isn't in the matrix.
+  variants?: Variant[];
   resume?: Snapshot | null;
   onCheckpoint?: (partial: Snapshot) => Promise<void>;
   onProgress?: (ev: ProgressEvent) => void;
@@ -245,7 +252,7 @@ async function runAndJudge(
 }
 
 export async function runBenchmark(opts: RunBenchmarkOptions): Promise<Snapshot> {
-  const matrix = expandMatrix(opts.prompts, opts.config.runs.samples);
+  const matrix = expandMatrix(opts.prompts, opts.config.runs.samples, opts.variants);
   const judgeCfg = judgeConfigFromConfig(opts.config);
 
   const runs: RunResult[] = opts.resume?.runs ? [...opts.resume.runs] : [];
