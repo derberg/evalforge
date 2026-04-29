@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.7.1 — 2026-04-29
+
+**Fixes:**
+
+- **Ollama judge no longer hits the 5-minute headers timeout.** 0.7.0 switched to streaming on the assumption that `bodyTimeout` was the only undici default in the way. Real-world `--debug` logs proved otherwise: on a partially-CPU-offloaded large model (e.g. `qwen2.5:72b-instruct-q4_0`), the model can spend > 5 min in prompt prefill before sending a single byte, so undici's `headersTimeout: 300_000ms` cancelled the request before the first stream chunk could arrive. Fixed by routing Ollama calls through a custom `undici.Agent` with `headersTimeout: 0` and `bodyTimeout: 0`. Connect timeout still applies (30 s) so a misconfigured endpoint still fails fast. Added `undici` as a direct dep to ensure the dispatcher and fetch implementation come from the same package version (mixing Node's bundled fetch with a standalone-undici Agent throws `UND_ERR_INVALID_ARG` at request time).
+- **Better failure messages.** Node's `fetch` wraps the underlying network error as the unhelpful `TypeError("fetch failed")` and stashes the actual reason on `.cause`. The judge-failure rationale and `judge-end` debug event now walk the cause chain, so a future timeout shows e.g. `fetch failed → Headers Timeout Error [UND_ERR_HEADERS_TIMEOUT]` instead of just `fetch failed`.
+
 ## 0.7.0 — 2026-04-29
 
 **Features:**

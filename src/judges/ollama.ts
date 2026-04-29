@@ -1,7 +1,18 @@
+import { Agent } from 'undici';
 import { buildJudgePrompt } from './rubric.js';
 import { parseJudgeResponse, type ParsedJudgment } from './parse.js';
 import type { DebugLogger, OllamaStreamSummary } from '../debug.js';
 import { noopDebug } from '../debug.js';
+
+// Local Ollama generation can take many minutes (prompt prefill on a partially
+// CPU-offloaded large model is itself slow, before any tokens are produced).
+// Disable undici's headersTimeout/bodyTimeout entirely for /api/chat so the
+// connection survives until the server replies or the user Ctrl-C's.
+const ollamaDispatcher = new Agent({
+  headersTimeout: 0,
+  bodyTimeout: 0,
+  connect: { timeout: 30_000 },
+});
 
 export interface OllamaJudgeOptions {
   endpoint: string;
@@ -69,15 +80,16 @@ export async function judgeWithOllama(opts: OllamaJudgeOptions): Promise<OllamaJ
     }
   };
 
-  const { res, bodyText } = await debug.fetch(
-    url,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    },
-    { onStreamLine: onLine, expectStream: true },
-  );
+  const init = {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+    dispatcher: ollamaDispatcher,
+  } as unknown as RequestInit;
+  const { res, bodyText } = await debug.fetch(url, init, {
+    onStreamLine: onLine,
+    expectStream: true,
+  });
 
   if (!res.ok) {
     throw new Error(`ollama: HTTP ${res.status} ${bodyText}`);

@@ -207,6 +207,22 @@ function shortHash(s: string): string {
   return createHash('sha256').update(s).digest('hex').slice(0, 16);
 }
 
+// Node's fetch wraps the underlying network error as TypeError("fetch failed")
+// and stashes the actual reason on .cause. Without unwrapping, every transport
+// failure shows up as the unhelpful "fetch failed". This walks the chain and
+// returns the most specific message available.
+function describeError(e: unknown): string {
+  if (!(e instanceof Error)) return String(e);
+  const parts: string[] = [e.message];
+  let cur: unknown = (e as Error & { cause?: unknown }).cause;
+  while (cur instanceof Error) {
+    const code = (cur as Error & { code?: string }).code;
+    parts.push(code ? `${cur.message} [${code}]` : cur.message);
+    cur = (cur as Error & { cause?: unknown }).cause;
+  }
+  return parts.join(' → ');
+}
+
 async function judgeRun(
   row: MatrixRow,
   run: RunResult,
@@ -264,7 +280,7 @@ async function judgeRun(
         ...(j.ollamaTimings && { ollamaTimings: j.ollamaTimings }),
       });
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = describeError(e);
       judgment = {
         runId: run.id,
         score: 0,

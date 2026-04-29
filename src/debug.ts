@@ -1,6 +1,13 @@
 import { appendFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { fetch as undiciFetch } from 'undici';
 import chalk from 'chalk';
+
+// Always go through undici's own fetch so a custom Agent passed via
+// init.dispatcher uses the same interceptor protocol as the fetch
+// implementation. Mixing Node's bundled fetch with a standalone-undici Agent
+// throws "invalid onRequestStart method" at request time.
+const _fetch = undiciFetch as unknown as typeof fetch;
 
 const STDERR_BODY_HEAD = 1024;
 const STDERR_BODY_TAIL = 512;
@@ -56,7 +63,7 @@ export function noopDebug(): DebugLogger {
     logFile: null,
     event() {},
     async fetch(url, init, ctx) {
-      const res = await fetch(url, init);
+      const res = await _fetch(url, init);
       if (ctx?.expectStream && res.body && ctx.onStreamLine) {
         const text = await consumeStream(res.body, ctx.onStreamLine);
         return { res, bodyText: text };
@@ -110,7 +117,7 @@ function makeLogger(logFile: string): DebugLogger {
       }, reqBody);
 
       const startedAt = Date.now();
-      const res = await fetch(url, init);
+      const res = await _fetch(url, init);
       const durationMs = Date.now() - startedAt;
 
       let bodyText = '';
