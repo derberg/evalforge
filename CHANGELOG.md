@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.5.1 — 2026-04-29
+
+**Fixes:**
+
+- **`eb run` no longer silently overwrites a complete snapshot.** Previously it warned ("Snapshot 'X' already exists and is complete; will overwrite") and ran the full matrix from scratch, draining tokens and clobbering an existing snapshot in place via the incremental writes. Now it errors out and tells you to pass `--force`, use a different `--save-as` name, or `eb snapshot rm <name>` to retry failed rows. `eb eval` already had this behavior; the asymmetry is gone.
+- New `--force` flag on `eb run` for the explicit-overwrite case.
+
 ## 0.5.0 — 2026-04-29
 
 **Features:**

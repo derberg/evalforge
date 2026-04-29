@@ -40,6 +40,7 @@ program
   .option('--save-as <name>', 'Save snapshot under this name')
   .option('--compare <name>', 'After running, compare against this snapshot')
   .option('--fail-on-regression <n>', 'Exit nonzero if net score drops more than <n>', parseFloat)
+  .option('--force', 'Overwrite an existing complete snapshot with the same --save-as name')
   .option('--dry-run', 'Print planned matrix without running')
   .option('-v, --verbose')
   .action(async (opts) => {
@@ -58,6 +59,7 @@ program
       saveAs: opts.saveAs,
       compare: opts.compare,
       failOnRegression: opts.failOnRegression,
+      force: Boolean(opts.force),
       dryRun: opts.dryRun,
       verbose: opts.verbose,
     });

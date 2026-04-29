@@ -21,6 +21,7 @@ export interface RunOptions {
   saveAs?: string;
   compare?: string;
   failOnRegression?: number;
+  force?: boolean;
   dryRun?: boolean;
   verbose?: boolean;
 }
@@ -121,8 +122,13 @@ export async function runCommand(opts: RunOptions): Promise<number> {
       info(
         `Resuming from partial snapshot: ${existing.runs.length} runs, ${existing.judgments.length} judgments already done`,
       );
+    } else if (!opts.force) {
+      err(
+        `Snapshot "${name}" already exists. Re-run with --force to overwrite, or use a different --save-as name. To retry failed rows from a complete snapshot, delete it first: eb snapshot rm ${name}`,
+      );
+      return 1;
     } else {
-      warn(`Snapshot "${name}" already exists and is complete; will overwrite`);
+      warn(`Overwriting existing snapshot "${name}" (--force)`);
     }
   } catch {
     // no existing snapshot — fresh run

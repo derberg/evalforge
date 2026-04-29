@@ -42,6 +42,38 @@ async function makeGitRepo(): Promise<string> {
 }
 
 describe('ef run', () => {
+  it('refuses to overwrite a complete snapshot without --force', async () => {
+    const repo = await makeGitRepo();
+    const fakeClaude = resolve('tests/fixtures/fake-claude.js');
+    chmodSync(fakeClaude, 0o755);
+    writeFileSync(
+      join(repo, 'eval-bench.yaml'),
+      `plugin:\n  path: ./\nprovider:\n  command: node\n  extraArgs: ['${fakeClaude}']\n  timeout: 10\njudge:\n  provider: ollama\n  model: q\n  endpoint: ${judgeUrl}\nruns:\n  samples: 1\n  parallel: 1\nsnapshots:\n  dir: ./snaps\n`,
+    );
+    writeFileSync(join(repo, 'prompts.yaml'), `- id: p1\n  prompt: hello\n  rubric: score 0-5\n`);
+    const cliPath = resolve('src/cli/index.ts');
+    const baseArgs = [
+      'tsx',
+      cliPath,
+      'run',
+      '--baseline',
+      'v1',
+      '--save-as',
+      'r1',
+      '--config',
+      'eval-bench.yaml',
+      '--prompts',
+      'prompts.yaml',
+    ];
+    const first = await execa('npx', baseArgs, { cwd: repo, reject: false });
+    expect(first.exitCode).toBe(0);
+    const second = await execa('npx', baseArgs, { cwd: repo, reject: false });
+    expect(second.exitCode).toBe(1);
+    expect(second.stderr + second.stdout).toMatch(/--force/);
+    const third = await execa('npx', [...baseArgs, '--force'], { cwd: repo, reject: false });
+    expect(third.exitCode).toBe(0);
+  }, 60_000);
+
   it('runs end-to-end and saves a snapshot', async () => {
     const repo = await makeGitRepo();
     const fakeClaude = resolve('tests/fixtures/fake-claude.js');

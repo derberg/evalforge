@@ -70,9 +70,9 @@ The matrix is rebuilt and three things happen:
 
 **Re-run against a different `--save-as <name>`:** starts fresh. The previous partial snapshot is left untouched on disk.
 
-**`eb run` against an existing *complete* snapshot:** warns and overwrites in place.
+**`eb run` or `eb eval` against an existing *complete* snapshot:** errors out and tells you to pass `--force`. This is deliberate — incremental writes happen in place, so silently overwriting on a name collision can corrupt a snapshot you cared about.
 
-**`eb eval` against an existing *complete* snapshot:** errors out and tells you to pass `--force`. Different default because an `eb eval` snapshot is usually a frozen reference (`v1-baseline` etc.) and silently clobbering one is a foot-gun.
+**To retry failed rows from a complete snapshot:** failed rows aren't retried even on resume (re-running an expensive Claude call that just failed is rarely useful). Either delete the snapshot to force a full retry — `eb snapshot rm <name>` — or pass `--force` to overwrite, accepting that all rows will run from scratch.
 
 **`eb run --baseline-from <name>`** loads `<name>`'s runs into the new snapshot's baseline slot at startup. If the new snapshot's name later resumes, those baseline rows are already on disk in the partial snapshot — the cache load is idempotent.
 
