@@ -25,3 +25,7 @@ export function progress(
     `[${current}/${total}] ${label.padEnd(40)} ${statusColor(status.padEnd(8))} (${(ms / 1000).toFixed(1)}s)`,
   );
 }
+
+export function step(current: number, total: number, label: string, phase: string): void {
+  console.log(`[${current}/${total}] ${label.padEnd(40)} ${chalk.dim(phase)}`);
+}

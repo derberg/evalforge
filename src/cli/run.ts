@@ -4,7 +4,7 @@ import { runBenchmark } from '../run.js';
 import { saveSnapshot, loadSnapshot, pruneFailedRuns } from '../snapshot.js';
 import { createWorktree, resolveSha } from '../swap.js';
 import { compareSnapshots, formatComparisonMarkdown } from '../compare.js';
-import { info, ok, warn, err, progress } from '../logger.js';
+import { info, ok, warn, err, progress, step } from '../logger.js';
 import type { Config, Snapshot, RunResult, Judgment } from '../types.js';
 
 export interface RunOptions {
@@ -216,7 +216,11 @@ export async function runCommand(opts: RunOptions): Promise<number> {
         await saveSnapshot(partial, cfg.snapshots.dir);
       },
       onProgress: (ev) => {
-        if (ev.kind === 'run-end') {
+        if (ev.kind === 'run-start') {
+          step(runIdx + 1, total, ev.rowId, 'running claude…');
+        } else if (ev.kind === 'judge-start') {
+          step(runIdx + 1, total, ev.runId, 'judging…');
+        } else if (ev.kind === 'run-end') {
           runIdx++;
           const status = ev.error ? 'FAIL' : 'OK';
           progress(runIdx, total, ev.rowId, status, ev.durationMs);

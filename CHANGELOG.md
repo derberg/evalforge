@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.5.3 — 2026-04-29
+
+**Fixes:**
+
+- **Live progress logging.** `eb run` and `eb eval` previously logged only on row completion (`run-end`), so a 4-row retry-failed against a slow judge (e.g. `qwen2.5:72b-instruct-q4_0`) sat silent for many minutes between "Retrying N failed runs…" and the first "OK" line. Now also logs `running claude…` on `run-start` and `judging…` on `judge-start`, so you see exactly which row is in flight and what phase it's in. Same data, no behavior change — just stops the run from looking frozen when the judge is slow.
+
 ## 0.5.2 — 2026-04-29
 
 **Features:**
