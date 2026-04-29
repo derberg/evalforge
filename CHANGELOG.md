@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.8.2 — 2026-04-29
+
+**Features:**
+
+- **Light/dark theme toggle in `eb view`.** Sun/moon icon button in the top bar; preference persists in `localStorage` (`ef-theme`) and respects `prefers-color-scheme` on first visit. An inline `<head>` script applies the saved theme before paint to avoid flashing the wrong palette. Light palette is a warm cream/bronze (paper-and-ink) read of the same instrument-panel design — color tokens are CSS variables now, so component styles cover both modes from one declaration. Translucent overlays moved to `color-mix()` so they re-derive from the active accent/bad colors.
+
 ## 0.8.1 — 2026-04-29
 
 **Fixes:**

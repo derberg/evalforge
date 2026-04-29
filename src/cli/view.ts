@@ -193,11 +193,12 @@ function renderHtml(s: Snapshot): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <title>${escape(s.name)} · evalforge</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<script>(function(){try{var s=localStorage.getItem('ef-theme');var t=s||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <style>
-:root{
+:root,:root[data-theme="dark"]{
   --bg:#0b0a0d;
   --bg-elev:#121116;
   --bg-cell:#16151a;
@@ -211,13 +212,38 @@ function renderHtml(s: Snapshot): string {
   --warn:#f6c177;
   --accent:#e0c89c;
   --grid:rgba(255,255,255,0.018);
+  --glow-good:rgba(122,252,167,0.05);
+  --glow-bad:rgba(255,111,111,0.05);
+  --topbar-grad:rgba(0,0,0,0.35);
+  --row-hover:#1c1a20;
+  --bar-text-blend:difference;
+}
+:root[data-theme="light"]{
+  --bg:#f3eee2;
+  --bg-elev:#ebe5d4;
+  --bg-cell:#fbf7ec;
+  --line:#cdc6b1;
+  --line-soft:#ddd6c1;
+  --fg:#1d1a13;
+  --fg-soft:#4d473b;
+  --mute:#8c8573;
+  --good:#1c7a3b;
+  --bad:#b53636;
+  --warn:#9a6918;
+  --accent:#876936;
+  --grid:rgba(0,0,0,0.025);
+  --glow-good:rgba(28,122,59,0.08);
+  --glow-bad:rgba(181,54,54,0.07);
+  --topbar-grad:rgba(255,255,255,0.55);
+  --row-hover:#e7dfca;
+  --bar-text-blend:normal;
 }
 *{box-sizing:border-box}
-html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:400;font-size:13px;line-height:1.55;-webkit-font-smoothing:antialiased}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:400;font-size:13px;line-height:1.55;-webkit-font-smoothing:antialiased;transition:background-color 0.2s ease,color 0.2s ease}
 body{
   background-image:
-    radial-gradient(circle at 18% -10%, rgba(122,252,167,0.05), transparent 45%),
-    radial-gradient(circle at 110% 8%, rgba(255,111,111,0.05), transparent 50%),
+    radial-gradient(circle at 18% -10%, var(--glow-good), transparent 45%),
+    radial-gradient(circle at 110% 8%, var(--glow-bad), transparent 50%),
     linear-gradient(var(--grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid) 1px, transparent 1px);
   background-size: auto, auto, 32px 32px, 32px 32px;
@@ -229,8 +255,23 @@ body{
 .topbar{
   display:flex;align-items:center;justify-content:space-between;gap:2em;
   padding:1.1em 2.4em;border-bottom:1px solid var(--line-soft);
-  background:linear-gradient(to bottom,rgba(0,0,0,0.35),transparent);
+  background:linear-gradient(to bottom,var(--topbar-grad),transparent);
 }
+.topbar-right{display:flex;align-items:center;gap:1.4em}
+.theme-toggle{
+  width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;
+  background:var(--bg-elev);border:1px solid var(--line);
+  color:var(--fg-soft);cursor:pointer;padding:0;
+  transition:background 0.18s,color 0.18s,border-color 0.18s,transform 0.18s;
+  font-family:inherit;
+}
+.theme-toggle:hover{background:var(--row-hover);color:var(--fg);border-color:var(--accent)}
+.theme-toggle:active{transform:scale(0.94)}
+.theme-toggle svg{width:14px;height:14px;display:block}
+.theme-toggle .icon-sun{display:inline}
+.theme-toggle .icon-moon{display:none}
+:root[data-theme="light"] .theme-toggle .icon-sun{display:none}
+:root[data-theme="light"] .theme-toggle .icon-moon{display:inline}
 .brand{display:flex;align-items:center;gap:0.7em;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--fg-soft)}
 .brand-dot{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 12px var(--good);animation:pulse 2.4s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:0.4}50%{opacity:1}}
@@ -304,7 +345,7 @@ body{
   opacity:0;animation:fade-in 0.5s ease-out forwards;
   animation-delay:calc(var(--i) * 60ms + 200ms);
 }
-.prow:hover{background:#1c1a20;border-color:var(--line)}
+.prow:hover{background:var(--row-hover);border-color:var(--line)}
 .prow:last-child{border-bottom:1px solid var(--line-soft)}
 .prow-id{font-size:13px;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .prow-bars{display:flex;flex-direction:column;gap:0.3em}
@@ -312,8 +353,8 @@ body{
 .prow-bar span{position:absolute;top:0;bottom:0;left:0;transform-origin:left;transform:scaleX(0);animation:bar-grow 1s cubic-bezier(0.2,0.8,0.2,1) forwards;animation-delay:calc(var(--i) * 60ms + 400ms)}
 .prow-bar-base span{background:var(--fg-soft)}
 .prow-bar-curr span{background:var(--accent)}
-.prow-bar em{position:absolute;right:0.6em;font-style:normal;font-size:10px;color:var(--fg);font-variant-numeric:tabular-nums;font-weight:500;mix-blend-mode:difference;z-index:1}
-.prow-bar::after{position:absolute;left:0.55em;font-size:9px;letter-spacing:0.18em;color:var(--bg);font-weight:600;z-index:1}
+.prow-bar em{position:absolute;right:0.6em;font-style:normal;font-size:10px;color:var(--fg);font-variant-numeric:tabular-nums;font-weight:500;mix-blend-mode:var(--bar-text-blend);z-index:1}
+.prow-bar::after{position:absolute;left:0.55em;font-size:9px;letter-spacing:0.18em;color:var(--bg);font-weight:600;z-index:1;mix-blend-mode:var(--bar-text-blend)}
 .prow-bar-base::after{content:'B'}
 .prow-bar-curr::after{content:'C'}
 .prow-delta{text-align:right;font-variant-numeric:tabular-nums;font-size:14px;font-weight:500;letter-spacing:-0.01em}
@@ -323,7 +364,7 @@ body{
 .prow-delta-up::before{content:'▲ '}
 .prow-delta-down::before{content:'▼ '}
 .prow-delta-flat::before{content:'• '}
-.prow-flag{width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(255,111,111,0.16);color:var(--bad);font-weight:700;font-size:13px}
+.prow-flag{width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:color-mix(in srgb, var(--bad) 18%, transparent);color:var(--bad);font-weight:700;font-size:13px}
 .prow-flag-empty{width:22px;height:22px}
 @keyframes fade-in{to{opacity:1}}
 
@@ -332,7 +373,7 @@ section{padding:2.2em 2.4em;margin-top:1.2em;border-top:1px solid var(--line-sof
 .sect-head{display:flex;align-items:baseline;gap:1.2em;margin-bottom:1.2em;flex-wrap:wrap}
 .sect-tag{font-size:10px;letter-spacing:0.24em;text-transform:uppercase;color:var(--mute);padding:0.3em 0.7em;border:1px solid var(--line)}
 section h3{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;font-size:36px;margin:0;color:var(--fg);letter-spacing:-0.01em;line-height:1}
-.prompt{background:linear-gradient(to right, rgba(224,200,156,0.05), transparent);border-left:2px solid var(--accent);padding:1em 1.4em;margin:0 0 1.4em;font-size:12px;color:var(--fg-soft)}
+.prompt{background:linear-gradient(to right, color-mix(in srgb, var(--accent) 8%, transparent), transparent);border-left:2px solid var(--accent);padding:1em 1.4em;margin:0 0 1.4em;font-size:12px;color:var(--fg-soft)}
 .prompt pre{margin:0;white-space:pre-wrap;font-family:'JetBrains Mono',monospace;line-height:1.6}
 
 .variants{display:grid;grid-template-columns:1fr 1fr;gap:0.7em 1em;align-items:stretch}
@@ -340,7 +381,7 @@ section h3{font-family:'Instrument Serif',serif;font-style:italic;font-weight:40
 .variant-head::after{content:'';flex:1;height:1px;background:var(--line-soft)}
 .variant-label{padding:0.28em 0.75em;border:1px solid var(--line);background:var(--bg-elev)}
 .variant-head.variant-baseline .variant-label{color:var(--fg-soft)}
-.variant-head.variant-current .variant-label{color:var(--accent);border-color:var(--accent);background:rgba(224,200,156,0.06)}
+.variant-head.variant-current .variant-label{color:var(--accent);border-color:var(--accent);background:color-mix(in srgb, var(--accent) 9%, transparent)}
 
 .cell{background:var(--bg-cell);border:1px solid var(--line-soft);padding:0.95em 1.05em;position:relative;border-left:3px solid var(--mute);display:flex;flex-direction:column;height:100%}
 .cell-empty{justify-content:center;align-items:center;border-style:dashed;border-left-style:dashed;background:transparent}
@@ -348,7 +389,7 @@ section h3{font-family:'Instrument Serif',serif;font-style:italic;font-weight:40
 .cell-ok{border-left-color:var(--accent)}
 .cell-meh{border-left-color:var(--warn)}
 .cell-bad{border-left-color:var(--bad)}
-.cell-fail{border-left-color:var(--bad);background:rgba(255,111,111,0.04)}
+.cell-fail{border-left-color:var(--bad);background:color-mix(in srgb, var(--bad) 6%, var(--bg-cell))}
 .cell-failed::after{content:'FAILED';position:absolute;top:0.6em;right:0.85em;font-size:9px;letter-spacing:0.22em;color:var(--bad);font-weight:700}
 .cell-head{display:flex;align-items:baseline;justify-content:space-between;gap:1em;margin-bottom:0.7em}
 .cell-score{font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:var(--fg);font-weight:500}
@@ -373,6 +414,7 @@ section h3{font-family:'Instrument Serif',serif;font-style:italic;font-weight:40
   .section-title,.prompts-table{margin-left:1.4em;margin-right:1.4em}
   .topbar{flex-direction:column;align-items:flex-start;gap:0.6em}
   .topbar-meta{text-align:left}
+  .topbar-right{flex-direction:row;align-items:flex-start;gap:0.8em;width:100%;justify-content:space-between}
 }
 </style></head>
 <body>
@@ -381,11 +423,18 @@ section h3{font-family:'Instrument Serif',serif;font-style:italic;font-weight:40
     <span class="brand-dot"></span>
     <span><strong>evalforge</strong> // snapshot view</span>
   </div>
-  <div class="topbar-meta">
-    <div>${escape(s.createdAt)}</div>
-    <div>judge <b>${escape(s.judge.provider)}/${escape(s.judge.model)}</b> · base <b>${escape(s.plugin.baselineRef)}</b> → curr <b>${escape(s.plugin.currentRef)}</b></div>
+  <div class="topbar-right">
+    <div class="topbar-meta">
+      <div>${escape(s.createdAt)}</div>
+      <div>judge <b>${escape(s.judge.provider)}/${escape(s.judge.model)}</b> · base <b>${escape(s.plugin.baselineRef)}</b> → curr <b>${escape(s.plugin.currentRef)}</b></div>
+    </div>
+    <button class="theme-toggle" type="button" aria-label="Toggle light/dark theme" title="Toggle theme">
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
   </div>
 </div>
+<script>(function(){document.addEventListener('click',function(e){var b=e.target.closest('.theme-toggle');if(!b)return;var c=document.documentElement.getAttribute('data-theme')||'dark';var n=c==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',n);try{localStorage.setItem('ef-theme',n);}catch(_){}});})();</script>
 
 <div class="hero" data-verdict="${verdict.klass}">
   <div class="hero-eyebrow">verdict</div>
