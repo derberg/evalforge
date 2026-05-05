@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.11.3 — 2026-05-05
+
+**Fixes:**
+
+- **`--retry-failed` (or `--rejudge`) combined with `--baseline-from`/`--current-from` now actually re-judges, instead of silently refilling pruned slots from cache.** When `--retry-failed` pruned a bad judgment, the subsequent `--baseline-from`/`--current-from` merge filled the gap with the cached judgment (which used the *old* judge), so the matrix dedup saw a complete row and skipped it: no `judging…` printed, the user saw "Retrying 1 failed judgment" but no actual judge work happened, and the snapshot ended up with one row scored by the old judge while the rest were scored by the new one. The merge now only adds cached judgments for runs being *newly* added in this merge step, never to fill gaps in runs that were already in resume — those gaps are intentional (the very thing `--retry-failed`/`--rejudge` exists to retry). Same logic also closes the analogous hole for `--rejudge` interactions in case someone wires up both.
+
 ## 0.11.2 — 2026-05-05
 
 **Fixes:**

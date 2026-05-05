@@ -235,14 +235,21 @@ export async function runCommand(opts: RunOptions): Promise<number> {
       ? []
       : [...(cachedBaseline?.judgments ?? []), ...(cachedCurrent?.judgments ?? [])];
     if (resume) {
+      // Only add cached runs whose IDs aren't already in resume — and pair
+      // each fresh run with its cached judgment. We deliberately do NOT fill
+      // judgment gaps for runs that were already in resume: those gaps were
+      // intentional (--retry-failed pruning a bad judgment, or --rejudge
+      // stripping all), and re-adding the cached judgment would silently
+      // restore the very judgment we wanted to retry.
       const haveRunIds = new Set(resume.runs.map((r) => r.id));
-      const haveJudgmentRunIds = new Set(resume.judgments.map((j) => j.runId));
+      const newCachedRuns = cachedRuns.filter((r) => !haveRunIds.has(r.id));
+      const newRunIds = new Set(newCachedRuns.map((r) => r.id));
       resume = {
         ...resume,
-        runs: [...resume.runs, ...cachedRuns.filter((r) => !haveRunIds.has(r.id))],
+        runs: [...resume.runs, ...newCachedRuns],
         judgments: [
           ...resume.judgments,
-          ...cachedJudgments.filter((j) => !haveJudgmentRunIds.has(j.runId)),
+          ...cachedJudgments.filter((j) => newRunIds.has(j.runId)),
         ],
       };
     } else {

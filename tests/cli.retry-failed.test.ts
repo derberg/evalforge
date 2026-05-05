@@ -10,12 +10,14 @@ import type { Snapshot } from '../src/types.js';
 
 let server: Server;
 let judgeUrl = '';
+let judgeCalls = 0;
 
 beforeAll(async () => {
   server = createServer((req, res) => {
     let body = '';
     req.on('data', (c) => (body += c));
     req.on('end', () => {
+      judgeCalls += 1;
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ message: { content: '{"score":4,"rationale":"ok"}' } }));
     });
@@ -319,6 +321,78 @@ describe('--retry-failed', () => {
     const fresh = after.judgments.find((j) => j.runId === seedSnap.judgments[0].runId);
     expect(fresh?.error).toBeNull();
     expect(fresh?.score).toBeGreaterThan(0);
+  }, 60_000);
+
+  it('--retry-failed combined with --baseline-from actually re-judges, not silently refilled from cache', async () => {
+    const repo = await makeRepo();
+
+    // Step 1: build a baseline snapshot via eb eval at v1.
+    const seed = await execa(
+      'npx',
+      ['tsx', cliPath, 'eval', '--save-as', 'baseline', '--ref', 'v1', ...sharedArgs],
+      { cwd: repo, reject: false },
+    );
+    expect(seed.exitCode).toBe(0);
+
+    // Step 2: build a target snapshot from baseline + current.
+    const buildTarget = await execa(
+      'npx',
+      [
+        'tsx',
+        cliPath,
+        'run',
+        '--baseline-from',
+        'baseline',
+        '--save-as',
+        'target',
+        ...sharedArgs,
+      ],
+      { cwd: repo, reject: false },
+    );
+    expect(buildTarget.exitCode).toBe(0);
+
+    const path = join(repo, 'snaps', 'target', 'snapshot.json');
+    const targetSnap: Snapshot = JSON.parse(await readFile(path, 'utf8'));
+    // Pick a baseline-side row (whose judgment in `baseline` is intact and
+    // would be picked up by the merge under the buggy logic) and corrupt it.
+    const target = targetSnap.judgments.find(
+      (j) => targetSnap.runs.find((r) => r.id === j.runId)?.variant === 'baseline',
+    );
+    if (!target) throw new Error('no baseline judgment found in target snapshot');
+    const targetRunId = target.runId;
+    target.error = 'simulated parse failure';
+    target.rationale = 'judge failed: simulated';
+    target.score = 0;
+    writeFileSync(path, JSON.stringify(targetSnap));
+
+    judgeCalls = 0;
+    const { exitCode, stdout } = await execa(
+      'npx',
+      [
+        'tsx',
+        cliPath,
+        'run',
+        '--baseline-from',
+        'baseline',
+        '--save-as',
+        'target',
+        '--retry-failed',
+        ...sharedArgs,
+      ],
+      { cwd: repo, reject: false },
+    );
+    expect(exitCode, `stdout:\n${stdout}`).toBe(0);
+    // The matrix must actually queue the row through the judge (not silently
+    // skip it because cachedBaseline.judgments refilled the gap).
+    expect(stdout).toMatch(/judging…/);
+    expect(stdout).toMatch(/Retrying 1 failed judgment/);
+    // One judge call for the one re-judged row.
+    expect(judgeCalls).toBe(1);
+
+    const after: Snapshot = JSON.parse(await readFile(path, 'utf8'));
+    const fresh = after.judgments.find((j) => j.runId === targetRunId);
+    expect(fresh?.error).toBeNull();
+    expect(fresh?.rationale).not.toBe('judge failed: simulated');
   }, 60_000);
 
   it('--retry-failed on a non-existent snapshot errors clearly', async () => {
