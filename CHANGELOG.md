@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.11.4 — 2026-05-05
+
+**Fixes:**
+
+- **Judge JSON parser no longer breaks when the rationale contains code fences.** A capable model (most often Sonnet on rubrics that mention LikeC4 / Mermaid / code formatting) would return *valid* JSON like `{"score": 4.5, "rationale": "the fenced block is labelled \`\`\`c4 rather than the rubric-specified \`\`\`likec4 …"}`. The non-greedy fence regex matched between two backtick triplets *inside* the rationale string and fed the malformed slice (`c4 rather than the rubric-specified `) to JSON.parse, which choked. The parser now tries strategies in order — raw-parse first, then fence-extract, then brace-slice — so well-formed JSON is taken at face value and the extraction heuristics only run as fallback for prose-wrapped responses. Three new unit tests pin the behavior: a verbatim Sonnet 4.6 failure mode, prose-around-fenced-JSON (still works), and prose-around-bare-JSON (still works).
+
 ## 0.11.3 — 2026-05-05
 
 **Fixes:**

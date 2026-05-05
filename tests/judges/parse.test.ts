@@ -35,6 +35,33 @@ describe('parseJudgeResponse', () => {
     expect((caught as JudgeParseError).raw).toBe(raw);
   });
 
+  it('parses JSON whose rationale contains code fences (real Sonnet 4.6 response)', () => {
+    // Verbatim shape of a response that broke pre-0.11.4: rationale describes
+    // a ```c4 fence vs the expected ```likec4, so the non-greedy fence regex
+    // would match between the two backtick triplets inside the JSON string
+    // and produce the malformed slice "c4 rather than the rubric-specified ".
+    const raw =
+      '{"score": 4.5, "rationale": "minor format issue: fenced block is labelled ```c4 rather than the rubric-specified ```likec4, otherwise spec-compliant."}';
+    const { score, rationale } = parseJudgeResponse(raw);
+    expect(score).toBe(4.5);
+    expect(rationale).toMatch(/```c4 rather than/);
+    expect(rationale).toMatch(/```likec4/);
+  });
+
+  it('falls back to fence extraction when prose surrounds a fenced JSON block', () => {
+    const raw = "Sure, here's the score:\n```json\n{\"score\": 3, \"rationale\": \"ok\"}\n```\nLet me know if you want elaboration.";
+    const { score, rationale } = parseJudgeResponse(raw);
+    expect(score).toBe(3);
+    expect(rationale).toBe('ok');
+  });
+
+  it('falls back to brace extraction when prose surrounds a bare JSON object', () => {
+    const raw = 'Score: {"score": 2, "rationale": "meh"} — that is my read.';
+    const { score, rationale } = parseJudgeResponse(raw);
+    expect(score).toBe(2);
+    expect(rationale).toBe('meh');
+  });
+
   it('throws JudgeParseError with raw when score is missing', () => {
     const raw = '{"rationale": "no score"}';
     let caught: unknown = null;
