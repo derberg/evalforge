@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.11.0 — 2026-05-05
+
+**Features:**
+
+- **`--rejudge` on `eb run`.** Re-score every cached Claude output with the configured judge — keeps run outputs verbatim, drops existing judgments, fires no Claude invocations. Answers "did changing the judge change the verdict?" without paying for a full re-run. Composes with `--baseline-from` and `--current-from`: stitch two saved snapshots and re-judge in one command (`eb run --baseline-from base --current-from cur --rejudge --save-as merged` produces a dual-variant snapshot with zero Claude calls and fresh judgments on both sides). Mutually exclusive with `--force` (which wipes runs) and `--retry-failed` (which targets failed Claude rows, not successful judgments). On an existing complete snapshot, `--rejudge` resumes it instead of erroring "already exists."
+
+**Fixes:**
+
+- **Matrix dedup now re-judges rows where a Claude run succeeded but a judgment is missing.** The third dedup branch previously skipped these rows alongside fully-done ones, so manually editing `snapshot.json` to clear judgments left rows unscored. With this change, the same dedup naturally implements `--rejudge`: any row with a successful run and no (or errored) judgment is routed through the judge, and any row with a successful run and a successful judgment is still skipped. Behavior on snapshots produced by older versions is unchanged because `runBenchmark` always wrote a judgment for every successful run.
+
 ## 0.10.0 — 2026-05-04
 
 **Features:**

@@ -84,6 +84,10 @@ eb run --baseline-from v1-baseline --current-from wip --save-as wip-vs-v1
 # a few rows failed yesterday (judge timeout, quota)? re-run only those
 eb run --baseline main --save-as baseline --retry-failed
 
+# changed the judge in eval-bench.yaml? re-score cached Claude outputs
+# without re-running Claude — answers "did the new judge change the verdict?"
+eb run --save-as wip --rejudge
+
 # diagnose a slow / stuck judge — writes a per-invocation debug log under
 # .eval-bench/snapshots/<name>/debug-<ts>.log with full HTTP bodies and
 # Ollama timing fields, plus a colorized stderr mirror

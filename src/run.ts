@@ -388,13 +388,13 @@ export async function runBenchmark(opts: RunBenchmarkOptions): Promise<Snapshot>
     if (!existingRun) {
       fresh.push(row);
     } else if (
-      existingJudgment &&
-      typeof existingJudgment.error === 'string' &&
-      existingJudgment.error !== 'run failed' &&
       existingRun.error === null &&
-      existingRun.output.length > 0
+      existingRun.output.length > 0 &&
+      (!existingJudgment ||
+        (typeof existingJudgment.error === 'string' && existingJudgment.error !== 'run failed'))
     ) {
-      // Run succeeded, judge errored — retry only the judge.
+      // Run succeeded; judge either errored or was deliberately stripped
+      // (e.g. via `eb run --rejudge`). Either way, judge fresh — no Claude call.
       rejudge.push(row);
     }
     // else: row is fully done (or run itself failed) — skip.

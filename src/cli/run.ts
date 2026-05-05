@@ -25,6 +25,7 @@ export interface RunOptions {
   failOnRegression?: number;
   force?: boolean;
   retryFailed?: boolean;
+  rejudge?: boolean;
   dryRun?: boolean;
   debug?: boolean;
   verbose?: boolean;
@@ -55,6 +56,14 @@ export async function runCommand(opts: RunOptions): Promise<number> {
   }
   if (opts.retryFailed && opts.force) {
     err('--retry-failed and --force are mutually exclusive');
+    return 1;
+  }
+  if (opts.rejudge && opts.force) {
+    err('--rejudge and --force are mutually exclusive');
+    return 1;
+  }
+  if (opts.rejudge && opts.retryFailed) {
+    err('--rejudge and --retry-failed are mutually exclusive');
     return 1;
   }
   const configPath = opts.config ?? '.eval-bench/eval-bench.yaml';
@@ -182,6 +191,15 @@ export async function runCommand(opts: RunOptions): Promise<number> {
       info(
         `Retrying ${pruned.prunedRuns} failed run${pruned.prunedRuns === 1 ? '' : 's'} in snapshot "${name}" (${pruned.snap.runs.length} successful runs preserved)`,
       );
+    } else if (opts.rejudge) {
+      if (existing.runs.length === 0) {
+        err(`Snapshot "${name}" has no cached runs to re-judge.`);
+        return 1;
+      }
+      resume = { ...existing, judgments: [], complete: false };
+      info(
+        `Re-judging ${existing.runs.length} cached run${existing.runs.length === 1 ? '' : 's'} in snapshot "${name}" with ${cfg.judge.provider}/${cfg.judge.model}`,
+      );
     } else if (existing.complete === false) {
       resume = existing;
       info(
@@ -189,7 +207,7 @@ export async function runCommand(opts: RunOptions): Promise<number> {
       );
     } else if (!opts.force) {
       err(
-        `Snapshot "${name}" already exists. Re-run with --force to overwrite, --retry-failed to re-run only failed rows, or use a different --save-as name.`,
+        `Snapshot "${name}" already exists. Re-run with --force to overwrite, --retry-failed to re-run only failed rows, --rejudge to re-judge cached runs, or use a different --save-as name.`,
       );
       return 1;
     } else {
@@ -202,12 +220,13 @@ export async function runCommand(opts: RunOptions): Promise<number> {
 
   if (cachedBaseline || cachedCurrent) {
     // Inject cached runs/judgments into the resume bag — runBenchmark dedups
-    // by row ID, so they're skipped instead of re-executed.
+    // by row ID, so they're skipped instead of re-executed. With --rejudge,
+    // drop the source judgments so the dedup re-routes the rows through the
+    // judge with the configured provider; the Claude outputs stay cached.
     const cachedRuns = [...(cachedBaseline?.runs ?? []), ...(cachedCurrent?.runs ?? [])];
-    const cachedJudgments = [
-      ...(cachedBaseline?.judgments ?? []),
-      ...(cachedCurrent?.judgments ?? []),
-    ];
+    const cachedJudgments = opts.rejudge
+      ? []
+      : [...(cachedBaseline?.judgments ?? []), ...(cachedCurrent?.judgments ?? [])];
     if (resume) {
       const haveRunIds = new Set(resume.runs.map((r) => r.id));
       const haveJudgmentRunIds = new Set(resume.judgments.map((j) => j.runId));
