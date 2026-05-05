@@ -8,7 +8,8 @@ import { readFile } from 'node:fs/promises';
 
 let server: Server;
 let judgeUrl = '';
-let judgeMode: 'ok' | 'fail' = 'ok';
+let judgeMode: 'ok' | 'fail' | 'malformed' = 'ok';
+const malformedJudgePayload = 'c4 rather than mermaid — not JSON, intentionally.';
 
 beforeAll(async () => {
   server = createServer((req, res) => {
@@ -18,6 +19,15 @@ beforeAll(async () => {
       if (judgeMode === 'fail') {
         res.writeHead(500, { 'content-type': 'text/plain' });
         res.end('judge upstream broken');
+        return;
+      }
+      if (judgeMode === 'malformed') {
+        // Valid HTTP envelope, but the model's content is prose instead of
+        // JSON — exercises the parse failure path and JudgeParseError.raw.
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(
+          JSON.stringify({ message: { content: malformedJudgePayload } }),
+        );
         return;
       }
       res.writeHead(200, { 'content-type': 'application/json' });
@@ -87,6 +97,31 @@ describe('eb run judgment failures', () => {
     expect(snap.runs).toHaveLength(4);
     expect(snap.judgments).toHaveLength(4);
     expect(snap.judgments.every((j: { error: string | null }) => j.error !== null)).toBe(true);
+  }, 60_000);
+
+  it('preserves the raw judge response on parse failures so the user can see what the model actually wrote', async () => {
+    const repo = await makeRepo();
+    judgeMode = 'malformed';
+
+    const { exitCode, stdout } = await execa(
+      'npx',
+      ['tsx', cliPath, 'run', '--baseline', 'v1', '--save-as', 'parse-fail', ...sharedArgs],
+      { cwd: repo, reject: false },
+    );
+    // All judgments failed → exit 1 (per the 0.11.1 fix).
+    expect(exitCode).toBe(1);
+    expect(stdout).toMatch(/could not parse JSON/);
+
+    const snap = JSON.parse(
+      await readFile(join(repo, 'snaps', 'parse-fail', 'snapshot.json'), 'utf8'),
+    );
+    expect(snap.judgments.length).toBeGreaterThan(0);
+    for (const j of snap.judgments) {
+      expect(j.error).toMatch(/could not parse JSON/);
+      // The raw response must be preserved verbatim — without this, the user
+      // had no way to see why the judge failed.
+      expect(j.raw).toBe(malformedJudgePayload);
+    }
   }, 60_000);
 
   it('exits 0 when only some judgments failed (partial failure is recoverable via --rejudge or --retry-failed)', async () => {

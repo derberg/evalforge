@@ -183,13 +183,20 @@ export async function runCommand(opts: RunOptions): Promise<number> {
   if (existing) {
     if (opts.retryFailed) {
       const pruned = pruneFailedRuns(existing);
-      if (pruned.prunedRuns === 0) {
-        info(`No failed runs to retry in snapshot "${name}" — nothing to do`);
+      if (pruned.prunedRuns === 0 && pruned.prunedFailedJudgmentsOnly === 0) {
+        info(`No failed runs or judgments to retry in snapshot "${name}" — nothing to do`);
         return 0;
       }
       resume = pruned.snap;
+      const parts: string[] = [];
+      if (pruned.prunedRuns > 0)
+        parts.push(`${pruned.prunedRuns} failed run${pruned.prunedRuns === 1 ? '' : 's'}`);
+      if (pruned.prunedFailedJudgmentsOnly > 0)
+        parts.push(
+          `${pruned.prunedFailedJudgmentsOnly} failed judgment${pruned.prunedFailedJudgmentsOnly === 1 ? '' : 's'}`,
+        );
       info(
-        `Retrying ${pruned.prunedRuns} failed run${pruned.prunedRuns === 1 ? '' : 's'} in snapshot "${name}" (${pruned.snap.runs.length} successful runs preserved)`,
+        `Retrying ${parts.join(' and ')} in snapshot "${name}" (${pruned.snap.runs.length} successful runs preserved)`,
       );
     } else if (opts.rejudge) {
       if (existing.runs.length === 0) {

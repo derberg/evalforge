@@ -46,17 +46,31 @@ export function pruneFailedRuns(snap: Snapshot): {
   snap: Snapshot;
   prunedRuns: number;
   prunedJudgments: number;
+  prunedFailedJudgmentsOnly: number;
 } {
   const failedRunIds = new Set(snap.runs.filter((r) => r.error !== null).map((r) => r.id));
-  if (failedRunIds.size === 0) {
-    return { snap, prunedRuns: 0, prunedJudgments: 0 };
+  // Also drop genuine judge failures (run succeeded, judgment errored with a
+  // real judge error like a parse failure or 5xx). The matrix dedup will
+  // re-judge those rows on resume without re-invoking Claude. 'run failed'
+  // judgments are tied to runs we already prune above, so exclude them.
+  const judgeOnlyFailureRunIds = new Set(
+    snap.judgments
+      .filter(
+        (j) => j.error !== null && j.error !== 'run failed' && !failedRunIds.has(j.runId),
+      )
+      .map((j) => j.runId),
+  );
+  if (failedRunIds.size === 0 && judgeOnlyFailureRunIds.size === 0) {
+    return { snap, prunedRuns: 0, prunedJudgments: 0, prunedFailedJudgmentsOnly: 0 };
   }
+  const dropJudgmentRunIds = new Set([...failedRunIds, ...judgeOnlyFailureRunIds]);
   const keptRuns = snap.runs.filter((r) => !failedRunIds.has(r.id));
-  const keptJudgments = snap.judgments.filter((j) => !failedRunIds.has(j.runId));
+  const keptJudgments = snap.judgments.filter((j) => !dropJudgmentRunIds.has(j.runId));
   return {
     snap: { ...snap, runs: keptRuns, judgments: keptJudgments, complete: false },
     prunedRuns: snap.runs.length - keptRuns.length,
     prunedJudgments: snap.judgments.length - keptJudgments.length,
+    prunedFailedJudgmentsOnly: judgeOnlyFailureRunIds.size,
   };
 }
 

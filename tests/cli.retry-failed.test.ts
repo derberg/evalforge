@@ -156,8 +156,40 @@ describe('pruneFailedRuns', () => {
     const out = pruneFailedRuns(seed);
     expect(out.prunedRuns).toBe(1);
     expect(out.prunedJudgments).toBe(1);
+    expect(out.prunedFailedJudgmentsOnly).toBe(0);
     expect(out.snap.complete).toBe(false);
     expect(out.snap.runs.map((r) => r.id)).toEqual(['a']);
+    expect(out.snap.judgments.map((j) => j.runId)).toEqual(['a']);
+  });
+
+  it('drops judgments-only failures (run succeeded, judge errored) without dropping the run', () => {
+    const seed: Snapshot = {
+      schemaVersion: 1,
+      name: 't',
+      createdAt: '',
+      plugin: { path: '', baselineRef: '', baselineSha: '', currentRef: '', currentSha: '' },
+      config: {} as never,
+      judge: { provider: 'ollama', model: 'q' },
+      prompts: [],
+      runs: [
+        { id: 'a', promptId: 'a', variant: 'current', sample: 1, output: 'good', durationMs: 0, exitCode: 0, error: null, usage: null },
+        { id: 'b', promptId: 'b', variant: 'current', sample: 1, output: 'also good', durationMs: 0, exitCode: 0, error: null, usage: null },
+      ],
+      judgments: [
+        { runId: 'a', score: 4, rationale: '', rubricHash: '', judgeProvider: 'ollama', judgeModel: 'q', raw: '', error: null },
+        { runId: 'b', score: 0, rationale: 'judge failed: parse error', rubricHash: '', judgeProvider: 'ollama', judgeModel: 'q', raw: 'c4 rather…', error: 'judge response: could not parse JSON' },
+      ],
+      summary: { baseline: { n: 0, mean: 0, median: 0, variance: 0 }, current: { n: 0, mean: 0, median: 0, variance: 0 }, delta: 0 },
+      complete: true,
+    };
+    const out = pruneFailedRuns(seed);
+    expect(out.prunedRuns).toBe(0);
+    expect(out.prunedFailedJudgmentsOnly).toBe(1);
+    expect(out.prunedJudgments).toBe(1);
+    expect(out.snap.complete).toBe(false);
+    // Both runs survive; the bad judgment is gone so the matrix dedup will
+    // re-judge that row on resume.
+    expect(out.snap.runs.map((r) => r.id).sort()).toEqual(['a', 'b']);
     expect(out.snap.judgments.map((j) => j.runId)).toEqual(['a']);
   });
 });
@@ -228,8 +260,66 @@ describe('--retry-failed', () => {
       { cwd: repo, reject: false },
     );
     expect(exitCode).toBe(0);
-    expect(stdout).toMatch(/No failed runs to retry/);
+    expect(stdout).toMatch(/No failed runs or judgments to retry/);
   }, 30_000);
+
+  it('eb run --retry-failed retries judgment-only failures without re-running Claude', async () => {
+    const repo = await makeRepo();
+
+    // Build a clean snapshot with both runs and judgments populated.
+    const seed = await execa(
+      'npx',
+      [
+        'tsx',
+        cliPath,
+        'run',
+        '--baseline',
+        'v1',
+        '--save-as',
+        'mixed',
+        ...sharedArgs,
+      ],
+      { cwd: repo, reject: false },
+    );
+    expect(seed.exitCode).toBe(0);
+
+    const path = join(repo, 'snaps', 'mixed', 'snapshot.json');
+    const seedSnap: Snapshot = JSON.parse(await readFile(path, 'utf8'));
+    // Corrupt one judgment so it looks like a parse failure (run kept clean).
+    seedSnap.judgments[0].error = 'judge response: could not parse JSON (Unexpected token...)';
+    seedSnap.judgments[0].score = 0;
+    seedSnap.judgments[0].rationale = 'judge failed: …';
+    writeFileSync(path, JSON.stringify(seedSnap));
+
+    const { exitCode, stdout } = await execa(
+      'npx',
+      [
+        'tsx',
+        cliPath,
+        'run',
+        '--baseline',
+        'v1',
+        '--save-as',
+        'mixed',
+        '--retry-failed',
+        ...sharedArgs,
+      ],
+      { cwd: repo, reject: false },
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toMatch(/Retrying 1 failed judgment/);
+    expect(stdout).not.toMatch(/Retrying \d+ failed run/);
+
+    const after: Snapshot = JSON.parse(await readFile(path, 'utf8'));
+    // Run output is preserved verbatim from seed.
+    const seedRun = seedSnap.runs.find((r) => r.id === seedSnap.judgments[0].runId);
+    const afterRun = after.runs.find((r) => r.id === seedSnap.judgments[0].runId);
+    expect(afterRun?.output).toBe(seedRun?.output);
+    // Judgment is fresh and successful.
+    const fresh = after.judgments.find((j) => j.runId === seedSnap.judgments[0].runId);
+    expect(fresh?.error).toBeNull();
+    expect(fresh?.score).toBeGreaterThan(0);
+  }, 60_000);
 
   it('--retry-failed on a non-existent snapshot errors clearly', async () => {
     const repo = await makeRepo();

@@ -13,6 +13,7 @@ import type {
 import { invokeClaude } from './provider.js';
 import { judge, judgeConfigFromConfig, type JudgeConfig } from './judges/index.js';
 import { hashRubric } from './judges/rubric.js';
+import { JudgeParseError } from './judges/parse.js';
 import type { DebugLogger } from './debug.js';
 import { noopDebug } from './debug.js';
 
@@ -283,6 +284,10 @@ async function judgeRun(
       });
     } catch (e) {
       const msg = describeError(e);
+      // Parse failures discard the JSON candidate but the underlying judge
+      // response is on the thrown error — keep it on the judgment so the
+      // user can inspect what the model actually wrote.
+      const rawOnError = e instanceof JudgeParseError ? e.raw : '';
       judgment = {
         runId: run.id,
         score: 0,
@@ -290,7 +295,7 @@ async function judgeRun(
         rubricHash: hashRubric(row.rubric),
         judgeProvider: judgeCfg.provider,
         judgeModel: judgeCfg.model,
-        raw: '',
+        raw: rawOnError,
         error: msg,
       };
       debug.event('judge-end', { rowId: row.id, score: 0, error: msg });

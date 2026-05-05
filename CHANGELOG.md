@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.11.2 — 2026-05-05
+
+**Fixes:**
+
+- **`--retry-failed` now also retries errored judgments, not just failed Claude runs.** A snapshot where a Claude run succeeded but the judge errored (HTTP 5xx, parse failure, rate limit) used to be untouched by `--retry-failed` because `pruneFailedRuns` only looked at `runs[].error`. The user's only recovery options were `--rejudge` (re-judges every row, throws away successful judgments) or hand-editing `snapshot.json`. Now `pruneFailedRuns` also drops judgments where `error !== null && error !== 'run failed'`, keeping the underlying run intact, and the matrix dedup re-judges those rows on resume. Failed Claude runs still get re-run as before. The new return field `prunedFailedJudgmentsOnly` distinguishes the two counts; the resume info line names them separately ("Retrying 1 failed run and 2 failed judgments…"). The "nothing to do" guard now considers both counters.
+- **Raw judge response is preserved on parse failures.** When the judge returned a response that wouldn't JSON-parse (most often a capable model writing prose instead of `{...}`), the snapshot's `judgment.raw` was empty — `parseJudgeResponse` threw a generic `Error`, the body was discarded, and the user couldn't see what the model actually wrote, only the parser's complaint about the leading characters. `parseJudgeResponse` now throws `JudgeParseError` (a subclass of `Error`) carrying the original `raw` string, and `judgeRun` reads `e.raw` in its catch handler so it lands on `judgment.raw`. Same fix applies to all four judges (Anthropic, Ollama, OpenAI-compatible, Claude CLI) since they all share `parseJudgeResponse`. The schema is unchanged — `judgment.raw` was always a string field, it just used to be empty when it should have carried the response.
+
+**Schema:**
+
+- `pruneFailedRuns` now returns an additional `prunedFailedJudgmentsOnly: number` field. Existing callers that destructure only the previous fields are unaffected; consumers that care about the distinction can read it directly.
+
 ## 0.11.1 — 2026-05-05
 
 **Fixes:**
