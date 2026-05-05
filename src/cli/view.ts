@@ -7,6 +7,17 @@ function escape(s: string): string {
   return s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c] ?? c);
 }
 
+// Render `<ref>@<short-sha>` so two snapshots labelled "HEAD" but pointing at
+// different commits — common after `--baseline-from`/`--current-from` stitches
+// inherit ref strings from their sources — are visually distinct in the view.
+// Falls back to whichever piece is non-empty if the other is missing.
+function refLabel(ref: string, sha: string): string {
+  if (!sha) return ref;
+  const short = sha.slice(0, 7);
+  if (!ref || ref === sha || ref === short) return short;
+  return `${ref}@${short}`;
+}
+
 function fmtUsage(r: { usage?: { inputTokens: number; outputTokens: number; totalCostUsd: number } | null }): string {
   if (!r.usage) return '';
   const u = r.usage;
@@ -451,7 +462,7 @@ section h3{font-family:'Instrument Serif',serif;font-style:italic;font-weight:40
   <div class="topbar-right">
     <div class="topbar-meta">
       <div>${escape(s.createdAt)}</div>
-      <div>judge <b>${escape(s.judge.provider)}/${escape(s.judge.model)}</b> · base <b>${escape(s.plugin.baselineRef)}</b> → curr <b>${escape(s.plugin.currentRef)}</b></div>
+      <div>judge <b>${escape(s.judge.provider)}/${escape(s.judge.model)}</b> · base <b>${escape(refLabel(s.plugin.baselineRef, s.plugin.baselineSha))}</b> → curr <b>${escape(refLabel(s.plugin.currentRef, s.plugin.currentSha))}</b></div>
     </div>
     <button class="theme-toggle" type="button" aria-label="Toggle light/dark theme" title="Toggle theme">
       <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>

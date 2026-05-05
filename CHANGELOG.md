@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.11.5 — 2026-05-05
+
+**Fixes:**
+
+- **`eb view` header now shows ref + short SHA so two snapshots labelled `HEAD` are visually distinct.** When `--baseline-from`/`--current-from` stitches a snapshot, the inherited `baselineRef`/`currentRef` are usually both `"HEAD"` (each source's `currentRef` at the time it was created), so the previous `base HEAD → curr HEAD` rendering hid that the two sides were actually different commits. Header now reads `base <ref>@<short-sha> → curr <ref>@<short-sha>` (e.g. `base HEAD@6ee8e7d → curr HEAD@5a438cb`). When the recorded ref is empty (legacy snapshots) or already equals the SHA, only the short SHA renders. The underlying snapshot data is unchanged — pure presentation fix.
+
 ## 0.11.4 — 2026-05-05
 
 **Fixes:**
