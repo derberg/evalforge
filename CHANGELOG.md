@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.11.8 — 2026-05-05
+
+**Fixes:**
+
+- **`eb view` no longer truncates run outputs to 800 characters.** A leftover `r.output.slice(0, 800)` in the cell renderer silently chopped every model output to the first 800 chars before embedding into the HTML, so the rendered `<pre>` always topped out at the same ~316px regardless of the run's actual length — which made every cell look the same size and made longer outputs appear "cut" mid-sentence (the trailing word was literally absent from the DOM, not clipped by CSS). The full output now renders. The CSS work in 0.11.7 to make paired cells stretch to the taller of the pair was correct in principle but moot in practice because the source content was always padded to the cap; with the cap gone, that layout fix actually shows up. The `0.8.0` redesign note about per-cell sizing finally behaves as advertised.
+
 ## 0.11.7 — 2026-05-05
 
 **Fixes:**

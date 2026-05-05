@@ -96,6 +96,59 @@ describe('ef view', () => {
     expect(html).not.toMatch(/base <b>HEAD<\/b>\s*→\s*curr <b>HEAD<\/b>/);
   });
 
+  it('renders the full run output without truncating to a hardcoded character cap', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ef-view-'));
+    const longOutput =
+      'BEGIN\n' + 'pad pad pad pad pad pad\n'.repeat(120) + 'END_OF_OUTPUT_MARKER';
+    mkdirSync(join(dir, 'long'), { recursive: true });
+    writeFileSync(
+      join(dir, 'long', 'snapshot.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        name: 'long',
+        createdAt: '',
+        plugin: { path: '', baselineRef: '', baselineSha: '', currentRef: '', currentSha: '' },
+        config: {},
+        judge: { provider: 'ollama', model: 'q' },
+        prompts: [{ id: 'p1', prompt: 'x', rubric: 'r' }],
+        runs: [
+          {
+            id: 'p1::baseline::1',
+            promptId: 'p1',
+            variant: 'baseline',
+            sample: 1,
+            output: longOutput,
+            durationMs: 1,
+            exitCode: 0,
+            error: null,
+          },
+        ],
+        judgments: [
+          {
+            runId: 'p1::baseline::1',
+            score: 4,
+            rationale: 'ok',
+            rubricHash: '',
+            judgeProvider: 'ollama',
+            judgeModel: 'q',
+            raw: '',
+          },
+        ],
+        summary: {
+          baseline: { n: 1, mean: 4, median: 4, variance: 0 },
+          current: { n: 0, mean: 0, median: 0, variance: 0 },
+          delta: -4,
+        },
+      }),
+    );
+    const html = await viewCommand({ dir, name: 'long', writeHtml: true, open: false });
+    expect(longOutput.length).toBeGreaterThan(800);
+    expect(html).toContain('BEGIN');
+    // The end-of-output marker is past the historical 800-char cap; without
+    // it the pre is silently truncated and every cell looks the same height.
+    expect(html).toContain('END_OF_OUTPUT_MARKER');
+  });
+
   it('emits CSS that lets paired cells stretch to the taller of the pair (no fixed height)', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'ef-view-'));
     seed(dir, 'a');

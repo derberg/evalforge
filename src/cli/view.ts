@@ -154,9 +154,9 @@ function renderHtml(s: Snapshot): string {
     const score = j?.score ?? 0;
     const cls = scoreClass(score);
     const failed = score === 0 || j?.error != null;
-    const sliced = (r.output ?? '').slice(0, 800);
-    const body = sliced.trim()
-      ? `<pre>${escape(sliced)}</pre>`
+    const out = r.output ?? '';
+    const body = out.trim()
+      ? `<pre>${escape(out)}</pre>`
       : '<div class="empty-out">no output</div>';
     const note = j?.rationale || j?.error || '';
     return `<div class="cell cell-${cls} variant-${variant}${failed ? ' cell-failed' : ''}">
