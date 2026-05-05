@@ -97,7 +97,7 @@ export async function evalCommand(opts: EvalOptions): Promise<number> {
   const sha = await resolveSha(gitRoot, ref);
   let total = prompts.length * cfg.runs.samples;
   let runIdx = resume?.runs.length ?? 0;
-  const seenRunEnd = new Set<string>();
+  const runDurations = new Map<string, number>();
 
   let debug: DebugLogger = noopDebug();
   if (opts.debug) {
@@ -160,13 +160,16 @@ export async function evalCommand(opts: EvalOptions): Promise<number> {
         } else if (ev.kind === 'judge-start') {
           step(runIdx + 1, total, ev.runId, 'judging…');
         } else if (ev.kind === 'run-end') {
-          seenRunEnd.add(ev.rowId);
+          // See cli/run.ts — judge-end is the single terminal signal. The
+          // run leg duration is stashed here and combined with the judge
+          // leg so the printed time reflects the full row wall-clock.
+          runDurations.set(ev.rowId, ev.durationMs);
+        } else if (ev.kind === 'judge-end') {
           runIdx++;
           const status = ev.error ? 'FAIL' : 'OK';
-          progress(runIdx, total, ev.rowId, status, ev.durationMs);
-        } else if (ev.kind === 'judge-end' && !seenRunEnd.has(ev.runId)) {
-          runIdx++;
-          progress(runIdx, total, ev.runId, 'OK', 0);
+          const runLeg = runDurations.get(ev.runId) ?? 0;
+          runDurations.delete(ev.runId);
+          progress(runIdx, total, ev.runId, status, runLeg + ev.durationMs);
         }
       },
     });
@@ -185,6 +188,17 @@ export async function evalCommand(opts: EvalOptions): Promise<number> {
       info(
         `  tokens in/out ${fmtTok(t.inputTokens)}/${fmtTok(t.outputTokens)} cache_read ${fmtTok(t.cacheReadInputTokens)} cache_create ${fmtTok(t.cacheCreationInputTokens)} cost $${t.totalCostUsd.toFixed(4)} (n=${t.reportedRuns})`,
       );
+    }
+    const failedJudgments = snap.judgments.filter((j) => j.error !== null);
+    if (failedJudgments.length > 0) {
+      const sample = failedJudgments[0].error ?? 'unknown';
+      warn(
+        `${failedJudgments.length}/${snap.judgments.length} judgments failed — first error: ${sample}`,
+      );
+    }
+    if (snap.judgments.length > 0 && failedJudgments.length === snap.judgments.length) {
+      err(`All ${snap.judgments.length} judgments failed — snapshot has no usable scores.`);
+      return 1;
     }
     return 0;
   } finally {

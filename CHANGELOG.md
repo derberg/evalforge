@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.11.1 — 2026-05-05
+
+**Fixes:**
+
+- **Judge failures now print `FAIL` instead of `OK` on the progress line.** When a judge errored — wrong API key, HTTP 5xx, parse error — the CLI's per-row terminal print hardcoded `OK` because the `judge-end` ProgressEvent didn't carry the error. The user only learned anything went wrong by reading the snapshot file. The `judge-end` event now carries `{ error: string | null, durationMs: number }`, and the CLI uses these to color the row red when the judge failed. The displayed duration is also more accurate now: `judge-end` is the single terminal print for a row, and the run leg duration (stashed at `run-end`) is summed with the judge leg, so the printed `(N.Ns)` reflects the full row wall-clock instead of just one leg. Eliminates a double-print that happened when a Claude run failed (`run-end` printed FAIL then `judge-end` printed FAIL again with `error: 'run failed'` and a misleading `[N+1/N]` counter).
+- **`eb run` and `eb eval` exit non-zero when every judgment failed.** A snapshot where every judgment errored — usually because of a misconfigured judge or an unset API key — has all-zero scores, so `summary.delta` is a meaningless `+0.00` and any downstream `--compare` / `--fail-on-regression` check would have approved a regression. The CLI now prints a `! N/M judgments failed — first error: <…>` warning whenever any judgment errors out, and exits 1 if N == M. Partial failures still exit 0 and stay recoverable via `--retry-failed` or `--rejudge`.
+
+**Schema:**
+
+- `ProgressEvent`'s `judge-end` variant adds `error: string | null` and `durationMs: number`. Existing consumers that only switch on `kind` ignore unknown fields and are unaffected.
+
 ## 0.11.0 — 2026-05-05
 
 **Features:**

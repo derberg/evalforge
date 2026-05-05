@@ -4,6 +4,10 @@ provider:
   command: node
   extraArgs: ['fake-claude.js']
   timeout: 10
+  # Opt out of the default per-sample cwd template so the subprocess inherits
+  # ef's cwd (the plugin dir) and node can resolve the relative
+  # fake-claude.js path.
+  cwd: null
 judge:
   provider: ollama
   model: q

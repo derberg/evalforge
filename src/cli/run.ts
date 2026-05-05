@@ -303,7 +303,7 @@ export async function runCommand(opts: RunOptions): Promise<number> {
   try {
     let total = prompts.length * cfg.runs.samples * 2;
     let runIdx = resume?.runs.length ?? 0;
-    const seenRunEnd = new Set<string>();
+    const runDurations = new Map<string, number>();
     const snap = await runBenchmark({
       config: cfg,
       prompts,
@@ -331,15 +331,19 @@ export async function runCommand(opts: RunOptions): Promise<number> {
         } else if (ev.kind === 'judge-start') {
           step(runIdx + 1, total, ev.runId, 'judging…');
         } else if (ev.kind === 'run-end') {
-          seenRunEnd.add(ev.rowId);
+          // Stash the run leg duration; `judge-end` always fires next (even
+          // for failed runs, where the judgment's error is set to 'run
+          // failed') and is the single terminal signal that prints status
+          // and increments the counter. This ensures the printed status
+          // reflects the full row outcome (run + judge) without double-
+          // counting.
+          runDurations.set(ev.rowId, ev.durationMs);
+        } else if (ev.kind === 'judge-end') {
           runIdx++;
           const status = ev.error ? 'FAIL' : 'OK';
-          progress(runIdx, total, ev.rowId, status, ev.durationMs);
-        } else if (ev.kind === 'judge-end' && !seenRunEnd.has(ev.runId)) {
-          // Re-judge-only row: no run-end fired for it, so judge-end is the
-          // terminal signal that advances the counter.
-          runIdx++;
-          progress(runIdx, total, ev.runId, 'OK', 0);
+          const runLeg = runDurations.get(ev.runId) ?? 0;
+          runDurations.delete(ev.runId);
+          progress(runIdx, total, ev.runId, status, runLeg + ev.durationMs);
         }
       },
     });
@@ -354,6 +358,15 @@ export async function runCommand(opts: RunOptions): Promise<number> {
     info(`  baseline mean ${snap.summary.baseline.mean.toFixed(2)} (n=${snap.summary.baseline.n})`);
     info(`  current  mean ${snap.summary.current.mean.toFixed(2)} (n=${snap.summary.current.n})`);
     info(`  delta    ${snap.summary.delta >= 0 ? '+' : ''}${snap.summary.delta.toFixed(2)}`);
+    const failedJudgments = snap.judgments.filter((j) => j.error !== null);
+    const allJudgmentsFailed =
+      snap.judgments.length > 0 && failedJudgments.length === snap.judgments.length;
+    if (failedJudgments.length > 0) {
+      const sample = failedJudgments[0].error ?? 'unknown';
+      warn(
+        `${failedJudgments.length}/${snap.judgments.length} judgments failed — first error: ${sample}`,
+      );
+    }
     if (snap.summary.tokens) {
       const t = snap.summary.tokens;
       const fmtTok = (n: number): string => n.toLocaleString('en-US');
@@ -376,6 +389,10 @@ export async function runCommand(opts: RunOptions): Promise<number> {
         err(`Regression exceeds threshold (${cmp.netDelta.toFixed(2)} < -${opts.failOnRegression})`);
         return 1;
       }
+    }
+    if (allJudgmentsFailed) {
+      err(`All ${snap.judgments.length} judgments failed — snapshot has no usable scores.`);
+      return 1;
     }
     return 0;
   } finally {

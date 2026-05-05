@@ -102,7 +102,7 @@ export type ProgressEvent =
   | { kind: 'run-start'; rowId: string }
   | { kind: 'run-end'; rowId: string; durationMs: number; error: string | null }
   | { kind: 'judge-start'; runId: string }
-  | { kind: 'judge-end'; runId: string; score: number };
+  | { kind: 'judge-end'; runId: string; score: number; error: string | null; durationMs: number };
 
 async function mapWithConcurrency<T>(
   items: T[],
@@ -232,6 +232,7 @@ async function judgeRun(
   debug: DebugLogger,
 ): Promise<Judgment> {
   onProgress?.({ kind: 'judge-start', runId: row.id });
+  const judgeStart = Date.now();
   let judgment: Judgment;
   if (run.error || run.output.length === 0) {
     judgment = {
@@ -295,7 +296,13 @@ async function judgeRun(
       debug.event('judge-end', { rowId: row.id, score: 0, error: msg });
     }
   }
-  onProgress?.({ kind: 'judge-end', runId: run.id, score: judgment.score });
+  onProgress?.({
+    kind: 'judge-end',
+    runId: run.id,
+    score: judgment.score,
+    error: judgment.error,
+    durationMs: Date.now() - judgeStart,
+  });
   return judgment;
 }
 
