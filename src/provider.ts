@@ -225,6 +225,9 @@ export async function invokeClaude(opts: InvokeClaudeOptions): Promise<InvokeCla
           ...process.env,
           EVAL_BENCH_PLUGIN_DIR: effectivePluginDir,
         },
+        // The prompt is passed via the provider's -p / equivalent flag;
+        // nothing piped via stdin. Default `pipe` makes claude CLI wait/warn.
+        stdin: 'ignore',
       });
       const durationMs = Date.now() - started;
       const rawStdout = result.stdout ?? '';

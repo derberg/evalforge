@@ -51,4 +51,24 @@ describe('judgeWithClaudeCli', () => {
       }),
     ).rejects.toThrow(/exit 7/);
   });
+
+  it('does not pipe stdin to the judge process — child sees EOF immediately', async () => {
+    // Real claude CLI warns + exits non-zero when stdin is left open as a
+    // pipe with no data ("Warning: no stdin data received in 3s, proceeding
+    // without it"). The fixture mirrors that contract: it succeeds only when
+    // stdin closes promptly.
+    const stdinDetect = resolve('tests/fixtures/fake-claude-stdin-detect.js');
+    chmodSync(stdinDetect, 0o755);
+    const r = await judgeWithClaudeCli({
+      command: 'node',
+      extraArgs: [stdinDetect],
+      model: null,
+      timeoutMs: 5000,
+      prompt: 'p',
+      output: 'o',
+      rubric: 'r',
+    });
+    expect(r.score).toBe(4);
+    expect(r.rationale).toBe('stdin-eof-received');
+  });
 });

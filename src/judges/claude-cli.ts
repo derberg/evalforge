@@ -23,6 +23,11 @@ export async function judgeWithClaudeCli(
   const result = await execa(opts.command ?? 'claude', args, {
     timeout: opts.timeoutMs ?? 180_000,
     reject: false,
+    // The judge prompt is passed via -p; nothing else needs to be piped.
+    // Without an explicit `ignore` here, execa defaults to `pipe`, which
+    // claude CLI treats as "stdin is going to arrive" — it waits ~3s then
+    // emits a warning + exits non-zero, breaking the judge call entirely.
+    stdin: 'ignore',
   });
   if (result.timedOut) {
     throw new Error('claude-cli: judge timed out');

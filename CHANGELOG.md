@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.11.6 — 2026-05-05
+
+**Fixes:**
+
+- **`stdin: 'ignore'` on the claude subprocess invocations.** Both the `claude-cli` judge and the provider call `execa()` without specifying `stdin`, so it defaults to `'pipe'` — the child sees an open writable pipe with no data ever arriving. Real `claude` CLI treats this as "stdin data is on its way", waits ~3 seconds, then prints `Warning: no stdin data received in 3s, proceeding without it. If piping from a slow command, redirect stdin explicitly: < /dev/null to skip, or wait longer.` and exits non-zero. With the claude-cli judge that translated to every judge call failing with the warning text in `judgment.error`, even though the prompt was passed correctly via `-p`. Now both call sites pass `stdin: 'ignore'`, which gives the child `/dev/null` and an immediate EOF. Includes a test using a fixture that succeeds only when `stdin` closes promptly — verified to fail before the fix and pass after.
+
 ## 0.11.5 — 2026-05-05
 
 **Fixes:**
