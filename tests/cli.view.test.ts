@@ -96,6 +96,25 @@ describe('ef view', () => {
     expect(html).not.toMatch(/base <b>HEAD<\/b>\s*→\s*curr <b>HEAD<\/b>/);
   });
 
+  it('emits CSS that lets paired cells stretch to the taller of the pair (no fixed height)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ef-view-'));
+    seed(dir, 'a');
+    const html = await viewCommand({ dir, name: 'a', writeHtml: true, open: false });
+    // The .variants grid must use auto-rows + stretch so each row sizes to
+    // its tallest cell and shorter cells fill the row.
+    expect(html).toContain('display:grid');
+    expect(html).toMatch(/\.variants\{[^}]*grid-template-columns:1fr 1fr[^}]*\}/);
+    expect(html).toMatch(/\.variants\{[^}]*align-items:stretch[^}]*\}/);
+    // The .cell must be a 3-row grid with the body row taking 1fr so the
+    // rationale stays pinned to the bottom even when the cell is stretched
+    // to match a taller paired cell.
+    expect(html).toMatch(/\.cell\{[^}]*display:grid[^}]*\}/);
+    expect(html).toMatch(/\.cell\{[^}]*grid-template-rows:auto 1fr auto[^}]*\}/);
+    // Must NOT use any pixel-fixed height that would override the row stretch.
+    expect(html).not.toMatch(/\.cell\{[^}]*height:\d+px/);
+    expect(html).not.toMatch(/\.cell\{[^}]*max-height/);
+  });
+
   it('uses just the short SHA when no ref label is recorded (legacy snapshots)', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'ef-view-'));
     mkdirSync(join(dir, 'legacy'), { recursive: true });

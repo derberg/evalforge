@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.11.7 — 2026-05-05
+
+**Fixes:**
+
+- **`eb view`: paired cells now reliably stretch to the height of the taller of the pair.** The cell layout was `display:flex; flex-direction:column; height:100%` with `margin-top:auto` on the rationale to pin it at the bottom — a combination that's well-known to resolve unpredictably across browsers when nested inside a CSS grid item (`height:100%` can collapse to intrinsic content height inside flex/grid contexts depending on how the browser resolves percentage tracks). The `.cell` is now an inner grid (`grid-template-rows: auto 1fr auto`): row 1 is the cell head, row 2 is the body and absorbs any extra space when the outer row stretches, row 3 is the rationale and pins to the bottom by virtue of being the last grid track. `align-self: stretch` (the default for grid items) makes the cell fill the outer `.variants` row, so a 500px cell paired with a 600px cell now both render at 600px instead of one collapsing to its intrinsic content height. No design changes — same look, more reliable layout. Includes a regression test pinning the new CSS shape (`grid-template-rows`, `align-items:stretch`, no fixed `height:Npx`).
+
 ## 0.11.6 — 2026-05-05
 
 **Fixes:**

@@ -404,6 +404,12 @@ section h3{font-family:'Instrument Serif',serif;font-style:italic;font-weight:40
 .prompt{background:linear-gradient(to right, color-mix(in srgb, var(--accent) 8%, transparent), transparent);border-left:2px solid var(--accent);padding:1em 1.4em;margin:0 0 1.4em;font-size:12px;color:var(--fg-soft)}
 .prompt pre{margin:0;white-space:pre-wrap;font-family:'JetBrains Mono',monospace;line-height:1.6}
 
+/* The variants grid uses a single 2-column track for ALL paired cells (one
+   row per sample), so each row's height auto-sizes to its TALLER cell and
+   align-items:stretch makes the shorter cell match. Don't replace this with
+   per-variant columns — that would let baseline and current cells size
+   independently and breaks visual pairing for samples of unequal output
+   length. */
 .variants{display:grid;grid-template-columns:1fr 1fr;gap:0.7em 1em;align-items:stretch}
 .variant-head{font-size:10px;letter-spacing:0.28em;text-transform:uppercase;color:var(--mute);display:flex;align-items:center;gap:0.8em;margin-bottom:-0.2em}
 .variant-head::after{content:'';flex:1;height:1px;background:var(--line-soft)}
@@ -411,7 +417,14 @@ section h3{font-family:'Instrument Serif',serif;font-style:italic;font-weight:40
 .variant-head.variant-baseline .variant-label{color:var(--fg-soft)}
 .variant-head.variant-current .variant-label{color:var(--accent);border-color:var(--accent);background:color-mix(in srgb, var(--accent) 9%, transparent)}
 
-.cell{background:var(--bg-cell);border:1px solid var(--line-soft);padding:0.95em 1.05em;position:relative;border-left:3px solid var(--mute);display:flex;flex-direction:column;height:100%}
+/* Cells use an inner 3-row grid (head / body / rationale) so the rationale
+   pins to the bottom without margin-top hacks and the body row absorbs any
+   extra height when the row is stretched to match the taller paired cell.
+   align-self:stretch is the default for grid items so the cell fills the
+   .variants row naturally; no height:100% needed (which can resolve to
+   intrinsic content height inside nested flex/grid contexts depending on
+   browser). */
+.cell{background:var(--bg-cell);border:1px solid var(--line-soft);padding:0.95em 1.05em;position:relative;border-left:3px solid var(--mute);display:grid;grid-template-rows:auto 1fr auto;align-self:stretch}
 .cell-empty{justify-content:center;align-items:center;border-style:dashed;border-left-style:dashed;background:transparent}
 .cell-great{border-left-color:var(--good)}
 .cell-ok{border-left-color:var(--accent)}
@@ -426,9 +439,10 @@ section h3{font-family:'Instrument Serif',serif;font-style:italic;font-weight:40
 .cell-meh .cell-score{color:var(--warn)}
 .cell-bad .cell-score,.cell-fail .cell-score{color:var(--bad)}
 .cell-tok{font-size:10px;color:var(--mute);letter-spacing:0.04em;font-variant-numeric:tabular-nums}
-.cell pre{white-space:pre-wrap;font-size:12px;margin:0;color:var(--fg);line-height:1.55;flex:0 0 auto}
+.cell pre{white-space:pre-wrap;font-size:12px;margin:0;color:var(--fg);line-height:1.55}
 .empty-out{font-family:'Instrument Serif',serif;font-style:italic;color:var(--bad);font-size:16px;padding:0.4em 0}
-.rat{margin-top:auto;padding-top:0.7em;border-top:1px dashed var(--line);font-size:11px;color:var(--fg-soft);line-height:1.55}
+/* No margin-top:auto needed — the cell's inner grid pins this to the last row. */
+.rat{padding-top:0.7em;border-top:1px dashed var(--line);font-size:11px;color:var(--fg-soft);line-height:1.55}
 .rat::before{content:'JUDGE';display:inline-block;font-size:9px;letter-spacing:0.2em;color:var(--mute);margin-right:0.6em;padding:0.1em 0.4em;border:1px solid var(--line)}
 .variant-empty{padding:2em;color:var(--mute);text-align:center;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;border:1px dashed var(--line)}
 
