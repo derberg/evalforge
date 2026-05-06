@@ -39,11 +39,19 @@ program
   )
   .option('--judge <spec>', 'Override judge, e.g. ollama:qwen2.5:14b')
   .option('--save-as <name>', 'Save snapshot under this name')
+  .option(
+    '--no-save',
+    'Run without persisting a snapshot — print results to stdout, write nothing under snapshots dir. Use for ad-hoc / single-rubric iteration.',
+  )
   .option('--compare <name>', 'After running, compare against this snapshot')
   .option('--fail-on-regression <n>', 'Exit nonzero if net score drops more than <n>', parseFloat)
   .option('--force', 'Overwrite an existing complete snapshot with the same --save-as name')
   .option('--retry-failed', 'Re-run only failed rows in the existing snapshot (preserves successes)')
   .option('--rejudge', 'Re-judge all cached runs with the configured judge — keeps Claude outputs, drops existing judgments')
+  .option(
+    '--prompt-inline',
+    'Read a single prompt + rubric interactively from the terminal instead of loading prompts.yaml. Implies --no-save unless --save-as is given. Runs the current side only.',
+  )
   .option('--dry-run', 'Print planned matrix without running')
   .option('--debug', 'Write a per-event debug log to the snapshot dir and mirror to stderr')
   .option('-v, --verbose')
@@ -62,11 +70,16 @@ program
       only: opts.only,
       judge: opts.judge,
       saveAs: opts.saveAs,
+      // commander's --no-save flips opts.save to false; otherwise it's
+      // undefined. Normalize to a boolean so downstream code can treat
+      // "save was explicitly disabled" as a single condition.
+      noSave: opts.save === false,
       compare: opts.compare,
       failOnRegression: opts.failOnRegression,
       force: Boolean(opts.force),
       retryFailed: Boolean(opts.retryFailed),
       rejudge: Boolean(opts.rejudge),
+      promptInline: Boolean(opts.promptInline),
       dryRun: opts.dryRun,
       debug: Boolean(opts.debug),
       verbose: opts.verbose,

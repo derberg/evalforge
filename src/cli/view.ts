@@ -48,7 +48,7 @@ function meanFor(s: Snapshot, promptId: string, variant: Variant): { mean: numbe
 
 interface Verdict {
   label: string;
-  klass: 'good' | 'bad' | 'mixed' | 'neutral' | 'partial';
+  klass: 'good' | 'bad' | 'mixed' | 'neutral' | 'partial' | 'evaluation';
   hook: string;
   reasons: string[];
 }
@@ -61,10 +61,29 @@ function computeVerdict(s: Snapshot): Verdict {
   const failed = s.judgments.filter((j) => j.score === 0 || j.error).length;
   const hasTokens = !!s.summary.tokens;
 
-  if (curN === 0)
-    return { label: 'baseline only', klass: 'partial', hook: 'No current variant runs to compare against.', reasons: [] };
-  if (baseN === 0)
-    return { label: 'current only', klass: 'partial', hook: 'No baseline variant runs to compare against.', reasons: [] };
+  // Single-variant snapshots (`eb eval`, `eb run --prompt-inline`) have nothing
+  // to A/B against. Render them as a self-contained evaluation report — quality
+  // score, run count, fail flag — instead of the misleading "no baseline to
+  // compare against" placeholder the dual-variant view fell back to.
+  if (curN === 0 || baseN === 0) {
+    const variantMean = curN === 0 ? s.summary.baseline.mean : s.summary.current.mean;
+    const variantN = curN === 0 ? baseN : curN;
+    const variantLabel = curN === 0 ? 'baseline' : 'current';
+    const reasons: string[] = [
+      `${variantLabel} mean ${variantMean.toFixed(2)} / 5`,
+      `${variantN} run${variantN === 1 ? '' : 's'}`,
+    ];
+    if (failed > 0) reasons.push(`${failed} failed`);
+    const hook =
+      failed > 0
+        ? `Standalone evaluation. ${failed} run${failed === 1 ? '' : 's'} failed — investigate before relying on the score.`
+        : variantMean >= 4
+          ? 'Standalone evaluation. Skill scoring well against the rubric.'
+          : variantMean >= 2.5
+            ? 'Standalone evaluation. Skill is mid-range — rubric or skill may need work.'
+            : 'Standalone evaluation. Skill scoring poorly — rubric or skill needs work.';
+    return { label: 'evaluation', klass: 'evaluation', hook, reasons };
+  }
 
   const scoreRegressed = scoreDelta < -0.2;
   const scoreImproved = scoreDelta > 0.2;
@@ -125,6 +144,15 @@ function renderHtml(s: Snapshot): string {
   const costDelta = t?.costDelta ?? 0;
   const failedRuns = s.judgments.filter((j) => j.score === 0 || j.error).length;
   const passedRuns = s.runs.length - failedRuns;
+  // Single-variant detection: one side has no runs. Drives column count in
+  // the per-prompt table, the cell grid, and the metric labels so a solo
+  // evaluation reads as "here are the scores" rather than "diff vs nothing."
+  const soloVariant: Variant | null =
+    s.summary.current.n === 0 && s.summary.baseline.n > 0
+      ? 'baseline'
+      : s.summary.baseline.n === 0 && s.summary.current.n > 0
+        ? 'current'
+        : null;
 
   const promptRows = s.prompts.map((p, i) => {
     const b = meanFor(s, p.id, 'baseline');
@@ -135,6 +163,20 @@ function renderHtml(s: Snapshot): string {
     const baseW = (b.mean / 5) * 100;
     const curW = (c.mean / 5) * 100;
     const flag = b.failed + c.failed > 0;
+    if (soloVariant) {
+      // Single-bar layout: drop the second bar and the delta column entirely.
+      // The grid template is overridden by .prompts-table.solo in CSS.
+      const m = soloVariant === 'current' ? c : b;
+      const w = (m.mean / 5) * 100;
+      const cls = soloVariant === 'current' ? 'prow-bar-curr' : 'prow-bar-base';
+      return `<a class="prow prow-solo" href="#p-${escape(p.id)}" style="--i:${i}">
+      <div class="prow-id">${escape(p.id)}</div>
+      <div class="prow-bars">
+        <div class="prow-bar ${cls}"><span style="width:${w.toFixed(1)}%"></span><em>${m.n ? m.mean.toFixed(2) : '—'}</em></div>
+      </div>
+      ${flag ? '<div class="prow-flag" title="contains failed runs">!</div>' : '<div class="prow-flag-empty"></div>'}
+    </a>`;
+    }
     return `<a class="prow" href="#p-${escape(p.id)}" style="--i:${i}">
       <div class="prow-id">${escape(p.id)}</div>
       <div class="prow-bars">
@@ -177,23 +219,35 @@ function renderHtml(s: Snapshot): string {
       .filter((r) => r.promptId === p.id && r.variant === 'current')
       .sort((a, b) => a.sample - b.sample);
     const maxN = Math.max(baseRuns.length, currRuns.length);
-    const pairs: string[] = [];
-    for (let i = 0; i < maxN; i++) {
-      pairs.push(renderCell(baseRuns[i], 'baseline'));
-      pairs.push(renderCell(currRuns[i], 'current'));
+    const cells: string[] = [];
+    if (soloVariant) {
+      const runs = soloVariant === 'current' ? currRuns : baseRuns;
+      for (const r of runs) cells.push(renderCell(r, soloVariant));
+    } else {
+      for (let i = 0; i < maxN; i++) {
+        cells.push(renderCell(baseRuns[i], 'baseline'));
+        cells.push(renderCell(currRuns[i], 'current'));
+      }
     }
-    const grid = maxN
-      ? `<div class="variant-head variant-baseline"><span class="variant-label">baseline</span></div>
+    let grid: string;
+    if (!maxN) {
+      grid = '<div class="variant-empty" style="grid-column:1/-1">no runs</div>';
+    } else if (soloVariant) {
+      grid = `<div class="variant-head variant-${soloVariant}"><span class="variant-label">${soloVariant}</span></div>
+         ${cells.join('')}`;
+    } else {
+      grid = `<div class="variant-head variant-baseline"><span class="variant-label">baseline</span></div>
          <div class="variant-head variant-current"><span class="variant-label">current</span></div>
-         ${pairs.join('')}`
-      : '<div class="variant-empty" style="grid-column:1/-1">no runs</div>';
+         ${cells.join('')}`;
+    }
+    const variantsClass = soloVariant ? 'variants variants-solo' : 'variants';
     return `<section id="p-${escape(p.id)}" style="--i:${pi}">
       <header class="sect-head">
         <span class="sect-tag">prompt ${pi + 1} / ${s.prompts.length}</span>
         <h3>${escape(p.id)}</h3>
       </header>
       <div class="prompt"><pre>${escape(p.prompt).trim()}</pre></div>
-      <div class="variants">${grid}</div>
+      <div class="${variantsClass}">${grid}</div>
     </section>`;
   });
 
@@ -311,6 +365,7 @@ body{
 .hero[data-verdict="mixed"] h1{color:var(--warn)}
 .hero[data-verdict="neutral"] h1{color:var(--accent)}
 .hero[data-verdict="partial"] h1{color:var(--accent)}
+.hero[data-verdict="evaluation"] h1{color:var(--accent)}
 
 .hero-hook{font-size:18px;color:var(--fg-soft);max-width:54ch;margin:1.6em 0 0;line-height:1.45}
 
@@ -329,6 +384,7 @@ body{
 .verdict-item-indicator.mixed{color:var(--warn)}
 .verdict-item-indicator.neutral{color:var(--accent)}
 .verdict-item-indicator.partial{color:var(--mute)}
+.verdict-item-indicator.evaluation{color:var(--accent)}
 .verdict-item-label{font-weight:500;color:var(--fg-soft);letter-spacing:0.02em;white-space:nowrap}
 .verdict-item-desc{color:var(--mute);font-size:10px}
 .verdict-item.active{border-color:var(--accent);background:color-mix(in srgb, var(--accent) 12%, var(--bg-elev));transform:scale(1.05)}
@@ -411,6 +467,8 @@ section h3{font-family:'Instrument Serif',serif;font-style:italic;font-weight:40
    independently and breaks visual pairing for samples of unequal output
    length. */
 .variants{display:grid;grid-template-columns:1fr 1fr;gap:0.7em 1em;align-items:stretch}
+.variants-solo{grid-template-columns:1fr}
+.prow.prow-solo{grid-template-columns:minmax(180px,2fr) 5fr 30px}
 .variant-head{font-size:10px;letter-spacing:0.28em;text-transform:uppercase;color:var(--mute);display:flex;align-items:center;gap:0.8em;margin-bottom:-0.2em}
 .variant-head::after{content:'';flex:1;height:1px;background:var(--line-soft)}
 .variant-label{padding:0.28em 0.75em;border:1px solid var(--line);background:var(--bg-elev)}
@@ -492,7 +550,19 @@ section h3{font-family:'Instrument Serif',serif;font-style:italic;font-weight:40
   <p class="hero-hook">${escape(verdict.hook)}</p>
   ${verdict.reasons.length ? `<div class="reasons">${verdict.reasons.map((r) => `<span class="reason">${escape(r)}</span>`).join('')}</div>` : ''}
   
-  <div class="verdict-scale">
+  ${
+    soloVariant
+      ? `<div class="verdict-scale">
+    <div class="verdict-scale-title">single-variant evaluation</div>
+    <div class="verdict-items">
+      <div class="verdict-item active">
+        <div class="verdict-item-indicator evaluation"></div>
+        <div class="verdict-item-label">evaluation</div>
+        <div class="verdict-item-desc">• ${soloVariant} variant only — run again with a baseline for an A/B comparison</div>
+      </div>
+    </div>
+  </div>`
+      : `<div class="verdict-scale">
     <div class="verdict-scale-title">all possible verdicts</div>
     <div class="verdict-items">
       <div class="verdict-item ${verdict.label === 'win' ? 'active' : ''}">
@@ -525,29 +595,25 @@ section h3{font-family:'Instrument Serif',serif;font-style:italic;font-weight:40
         <div class="verdict-item-label">cost regression</div>
         <div class="verdict-item-desc">• same quality, higher cost</div>
       </div>
-      <div class="verdict-item ${verdict.klass === 'partial' ? 'active' : ''}">
-        <div class="verdict-item-indicator partial"></div>
-        <div class="verdict-item-label">${verdict.klass === 'partial' ? escape(verdict.label) : 'partial'}</div>
-        <div class="verdict-item-desc">• incomplete comparison</div>
-      </div>
     </div>
-  </div>
+  </div>`
+  }
 </div>
 
 <div class="metrics">
   <div class="metric">
     <div class="metric-label">quality score <span class="metric-label-tag">mean / 5</span></div>
-    <div class="metric-value">${currentMean.toFixed(2)}</div>
-    <div class="metric-detail">baseline <b>${baselineMean.toFixed(2)}</b> · n=${s.summary.current.n || s.summary.baseline.n}</div>
-    <div class="metric-delta ${scoreDeltaCls}" data-icon="${scoreDelta > 0.2 ? '▲' : scoreDelta < -0.2 ? '▼' : '•'}">${scoreDelta >= 0 ? '+' : ''}${scoreDelta.toFixed(2)} vs baseline</div>
-    <div class="metric-bar"><span style="width:${Math.min(100, Math.max(0, (currentMean / 5) * 100)).toFixed(1)}%"></span></div>
+    <div class="metric-value">${(soloVariant === 'baseline' ? baselineMean : currentMean).toFixed(2)}</div>
+    <div class="metric-detail">${soloVariant ? `${soloVariant} variant · n=${soloVariant === 'baseline' ? s.summary.baseline.n : s.summary.current.n}` : `baseline <b>${baselineMean.toFixed(2)}</b> · n=${s.summary.current.n || s.summary.baseline.n}`}</div>
+    ${soloVariant ? '<div class="metric-delta neutral" data-icon="•">standalone (no baseline)</div>' : `<div class="metric-delta ${scoreDeltaCls}" data-icon="${scoreDelta > 0.2 ? '▲' : scoreDelta < -0.2 ? '▼' : '•'}">${scoreDelta >= 0 ? '+' : ''}${scoreDelta.toFixed(2)} vs baseline</div>`}
+    <div class="metric-bar"><span style="width:${Math.min(100, Math.max(0, ((soloVariant === 'baseline' ? baselineMean : currentMean) / 5) * 100)).toFixed(1)}%"></span></div>
   </div>
   <div class="metric">
     <div class="metric-label">cost <span class="metric-label-tag">usd</span></div>
-    <div class="metric-value">${t ? '$' + t.current.totalCostUsd.toFixed(2) : '—'}</div>
-    <div class="metric-detail">${t ? `baseline <b>$${t.baseline.totalCostUsd.toFixed(2)}</b>` : 'no token data'}</div>
-    ${t ? `<div class="metric-delta ${costDeltaCls}" data-icon="${costDelta < -0.05 ? '▼' : costDelta > 0.05 ? '▲' : '•'}">${costDelta >= 0 ? '+' : ''}$${costDelta.toFixed(2)} vs baseline</div>` : '<div class="metric-delta neutral" data-icon="•">—</div>'}
-    <div class="metric-bar"><span style="width:${t ? Math.min(100, (t.current.totalCostUsd / (Math.max(t.current.totalCostUsd, t.baseline.totalCostUsd) || 1)) * 100).toFixed(1) : 0}%"></span></div>
+    <div class="metric-value">${t ? '$' + (soloVariant === 'baseline' ? t.baseline.totalCostUsd : t.current.totalCostUsd).toFixed(2) : '—'}</div>
+    <div class="metric-detail">${t ? (soloVariant ? `${soloVariant} variant` : `baseline <b>$${t.baseline.totalCostUsd.toFixed(2)}</b>`) : 'no token data'}</div>
+    ${t && !soloVariant ? `<div class="metric-delta ${costDeltaCls}" data-icon="${costDelta < -0.05 ? '▼' : costDelta > 0.05 ? '▲' : '•'}">${costDelta >= 0 ? '+' : ''}$${costDelta.toFixed(2)} vs baseline</div>` : '<div class="metric-delta neutral" data-icon="•">—</div>'}
+    <div class="metric-bar"><span style="width:${t ? Math.min(100, ((soloVariant === 'baseline' ? t.baseline.totalCostUsd : t.current.totalCostUsd) / (Math.max(t.current.totalCostUsd, t.baseline.totalCostUsd) || 1)) * 100).toFixed(1) : 0}%"></span></div>
   </div>
   <div class="metric">
     <div class="metric-label">runs <span class="metric-label-tag">${s.runs.length} total</span></div>

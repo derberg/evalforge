@@ -4,9 +4,13 @@ import { runBenchmark } from '../run.js';
 import { saveSnapshot, loadSnapshot, pruneFailedRuns } from '../snapshot.js';
 import { createWorktree, resolveSha } from '../swap.js';
 import { compareSnapshots, formatComparisonMarkdown } from '../compare.js';
-import { info, ok, warn, err, progress, step } from '../logger.js';
+import { info, ok, warn, err, progress, step, judgeResult } from '../logger.js';
 import { initDebug, noopDebug, type DebugLogger } from '../debug.js';
-import type { Config, Snapshot, RunResult, Judgment } from '../types.js';
+import { readInlinePrompt } from './prompt-inline.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { Config, PromptSpec, Snapshot, RunResult, Judgment, Variant } from '../types.js';
 
 export interface RunOptions {
   cwd: string;
@@ -21,11 +25,13 @@ export interface RunOptions {
   only?: string[];
   judge?: string;
   saveAs?: string;
+  noSave?: boolean;
   compare?: string;
   failOnRegression?: number;
   force?: boolean;
   retryFailed?: boolean;
   rejudge?: boolean;
+  promptInline?: boolean;
   dryRun?: boolean;
   debug?: boolean;
   verbose?: boolean;
@@ -66,14 +72,81 @@ export async function runCommand(opts: RunOptions): Promise<number> {
     err('--rejudge and --retry-failed are mutually exclusive');
     return 1;
   }
+  // --no-save is the "iterating, don't pollute snapshots dir" flag. Combining
+  // it with anything that requires reading or rewriting an existing snapshot
+  // (--save-as / --retry-failed / --rejudge / --force) is a contradiction:
+  // there's nothing to read or rewrite if we're not persisting in the first
+  // place. Reject explicitly so the user's intent stays unambiguous.
+  if (opts.noSave) {
+    if (opts.saveAs) {
+      err('--no-save and --save-as are mutually exclusive');
+      return 1;
+    }
+    if (opts.retryFailed) {
+      err('--no-save and --retry-failed are mutually exclusive (--retry-failed needs an existing snapshot)');
+      return 1;
+    }
+    if (opts.rejudge) {
+      err('--no-save and --rejudge are mutually exclusive (--rejudge needs an existing snapshot)');
+      return 1;
+    }
+    if (opts.force) {
+      err('--no-save and --force are mutually exclusive');
+      return 1;
+    }
+    if (opts.compare) {
+      err('--no-save and --compare are mutually exclusive (--compare reads two saved snapshots)');
+      return 1;
+    }
+  }
+  // --prompt-inline replaces the prompts-file matrix with one inline prompt
+  // and runs only the current side. By default it doesn't save (this is the
+  // "throwaway iteration" flow); pass --save-as to opt into persistence.
+  if (opts.promptInline) {
+    if (opts.only?.length) {
+      err('--prompt-inline and --only are mutually exclusive (inline mode runs exactly one prompt)');
+      return 1;
+    }
+    if (opts.baseline || opts.baselineFrom) {
+      err('--prompt-inline runs the current side only — drop --baseline / --baseline-from');
+      return 1;
+    }
+    if (opts.currentFrom) {
+      err('--prompt-inline and --current-from are mutually exclusive');
+      return 1;
+    }
+  }
   const configPath = opts.config ?? '.eval-bench/eval-bench.yaml';
   const promptsPath = opts.prompts ?? '.eval-bench/prompts.yaml';
   const cfg = applyOverrides(loadConfig(configPath), opts);
-  const allPrompts = loadPrompts(promptsPath);
-  const prompts = opts.only?.length ? filterPrompts(allPrompts, opts.only) : allPrompts;
+
+  // --no-save reroutes the snapshots dir to a tempdir so per-row cwd
+  // templating (which references {{snapshots_dir}}/{{snapshot_name}}) still
+  // resolves to a real, writable path. The temp dir is rm'd in the finally.
+  let ephemeralDir: string | null = null;
+  const noSave = opts.noSave || (opts.promptInline && !opts.saveAs);
+  if (noSave) {
+    ephemeralDir = mkdtempSync(join(tmpdir(), 'eb-ephemeral-'));
+    cfg.snapshots.dir = ephemeralDir;
+  }
+
+  let prompts: PromptSpec[];
+  let allPromptsLen: number;
+  if (opts.promptInline) {
+    const inline = await readInlinePrompt();
+    prompts = [inline];
+    allPromptsLen = 1;
+  } else {
+    const allPrompts = loadPrompts(promptsPath);
+    prompts = opts.only?.length ? filterPrompts(allPrompts, opts.only) : allPrompts;
+    allPromptsLen = allPrompts.length;
+  }
   const gitRoot = cfg.plugin.gitRoot;
   const name = opts.saveAs ?? new Date().toISOString().replace(/[:.]/g, '-');
   const wantPromptIds = new Set(prompts.map((p) => p.id));
+  // --prompt-inline is current-only: skip the baseline leg entirely. Other
+  // flows still run both variants.
+  const variants: Variant[] = opts.promptInline ? ['current'] : ['baseline', 'current'];
 
   let baselineRef: string;
   let baselineSha: string;
@@ -150,8 +223,10 @@ export async function runCommand(opts: RunOptions): Promise<number> {
   }
 
   info(`Plugin:   ${cfg.plugin.path}`);
-  if (opts.only?.length) {
-    info(`Prompts:  ${prompts.length}/${allPrompts.length} (filtered: ${prompts.map((p) => p.id).join(', ')})`);
+  if (opts.promptInline) {
+    info(`Prompts:  1 (inline: ${prompts[0].id})`);
+  } else if (opts.only?.length) {
+    info(`Prompts:  ${prompts.length}/${allPromptsLen} (filtered: ${prompts.map((p) => p.id).join(', ')})`);
   }
   if (cachedBaseline) {
     info(
@@ -169,9 +244,13 @@ export async function runCommand(opts: RunOptions): Promise<number> {
   }
   info(`Judge:    ${cfg.judge.provider}/${cfg.judge.model}`);
   info(
-    `Matrix:   ${prompts.length} prompts × ${cfg.runs.samples} samples × 2 variants = ${prompts.length * cfg.runs.samples * 2} runs`,
+    `Matrix:   ${prompts.length} prompts × ${cfg.runs.samples} samples × ${variants.length} variant${variants.length === 1 ? '' : 's'} = ${prompts.length * cfg.runs.samples * variants.length} runs`,
   );
-  if (opts.dryRun) return 0;
+  if (noSave) info(`Save:     OFF (ephemeral run, snapshot not persisted)`);
+  if (opts.dryRun) {
+    if (ephemeralDir) rmSync(ephemeralDir, { recursive: true, force: true });
+    return 0;
+  }
 
   let resume: Snapshot | null = null;
   let existing: Snapshot | null = null;
@@ -279,7 +358,10 @@ export async function runCommand(opts: RunOptions): Promise<number> {
     }
   }
 
-  const baselineWt = cachedBaseline ? null : await createWorktree(gitRoot, baselineRef);
+  // Skip the worktree when the matrix excludes the baseline variant
+  // (--prompt-inline) or when baseline runs are coming from a cached snapshot.
+  const baselineWt =
+    !variants.includes('baseline') || cachedBaseline ? null : await createWorktree(gitRoot, baselineRef);
 
   let debug: DebugLogger = noopDebug();
   if (opts.debug) {
@@ -328,11 +410,17 @@ export async function runCommand(opts: RunOptions): Promise<number> {
       currentRef,
       currentSha,
       name,
+      variants,
       resume,
       debug,
-      onCheckpoint: async (partial) => {
-        await saveSnapshot(partial, cfg.snapshots.dir);
-      },
+      // Ephemeral runs skip checkpointing — there's no persistent snapshot
+      // to crash-resume into, and writing under a tempdir we'll rm anyway is
+      // wasted I/O.
+      onCheckpoint: noSave
+        ? undefined
+        : async (partial) => {
+            await saveSnapshot(partial, cfg.snapshots.dir);
+          },
       onProgress: (ev) => {
         // Reframe the progress denominator around the work this invocation
         // actually has to do (fresh runs + judge retries), so resumes don't
@@ -358,20 +446,29 @@ export async function runCommand(opts: RunOptions): Promise<number> {
           const runLeg = runDurations.get(ev.runId) ?? 0;
           runDurations.delete(ev.runId);
           progress(runIdx, total, ev.runId, status, runLeg + ev.durationMs);
+          judgeResult(ev.score, ev.rationale, ev.error);
         }
       },
     });
-    const path = await saveSnapshot(snap, cfg.snapshots.dir);
-    debug.event('snapshot-saved', {
-      path,
-      runs: snap.runs.length,
-      judgments: snap.judgments.length,
-      complete: true,
-    });
-    ok(`Snapshot saved: ${path}`);
-    info(`  baseline mean ${snap.summary.baseline.mean.toFixed(2)} (n=${snap.summary.baseline.n})`);
+    if (noSave) {
+      ok(`Run complete (ephemeral — nothing written to disk)`);
+    } else {
+      const path = await saveSnapshot(snap, cfg.snapshots.dir);
+      debug.event('snapshot-saved', {
+        path,
+        runs: snap.runs.length,
+        judgments: snap.judgments.length,
+        complete: true,
+      });
+      ok(`Snapshot saved: ${path}`);
+    }
+    if (snap.summary.baseline.n > 0) {
+      info(`  baseline mean ${snap.summary.baseline.mean.toFixed(2)} (n=${snap.summary.baseline.n})`);
+    }
     info(`  current  mean ${snap.summary.current.mean.toFixed(2)} (n=${snap.summary.current.n})`);
-    info(`  delta    ${snap.summary.delta >= 0 ? '+' : ''}${snap.summary.delta.toFixed(2)}`);
+    if (snap.summary.baseline.n > 0) {
+      info(`  delta    ${snap.summary.delta >= 0 ? '+' : ''}${snap.summary.delta.toFixed(2)}`);
+    }
     const failedJudgments = snap.judgments.filter((j) => j.error !== null);
     const allJudgmentsFailed =
       snap.judgments.length > 0 && failedJudgments.length === snap.judgments.length;
@@ -386,13 +483,19 @@ export async function runCommand(opts: RunOptions): Promise<number> {
       const fmtTok = (n: number): string => n.toLocaleString('en-US');
       const fmtCost = (n: number): string => `$${n.toFixed(4)}`;
       const sign = t.costDelta >= 0 ? '+' : '';
-      info(
-        `  baseline tokens in/out ${fmtTok(t.baseline.inputTokens)}/${fmtTok(t.baseline.outputTokens)} cache_read ${fmtTok(t.baseline.cacheReadInputTokens)} cache_create ${fmtTok(t.baseline.cacheCreationInputTokens)} cost ${fmtCost(t.baseline.totalCostUsd)} (n=${t.baseline.reportedRuns})`,
-      );
-      info(
-        `  current  tokens in/out ${fmtTok(t.current.inputTokens)}/${fmtTok(t.current.outputTokens)} cache_read ${fmtTok(t.current.cacheReadInputTokens)} cache_create ${fmtTok(t.current.cacheCreationInputTokens)} cost ${fmtCost(t.current.totalCostUsd)} (n=${t.current.reportedRuns})`,
-      );
-      info(`  cost Δ   ${sign}${fmtCost(t.costDelta)}`);
+      if (t.baseline.reportedRuns > 0) {
+        info(
+          `  baseline tokens in/out ${fmtTok(t.baseline.inputTokens)}/${fmtTok(t.baseline.outputTokens)} cache_read ${fmtTok(t.baseline.cacheReadInputTokens)} cache_create ${fmtTok(t.baseline.cacheCreationInputTokens)} cost ${fmtCost(t.baseline.totalCostUsd)} (n=${t.baseline.reportedRuns})`,
+        );
+      }
+      if (t.current.reportedRuns > 0) {
+        info(
+          `  current  tokens in/out ${fmtTok(t.current.inputTokens)}/${fmtTok(t.current.outputTokens)} cache_read ${fmtTok(t.current.cacheReadInputTokens)} cache_create ${fmtTok(t.current.cacheCreationInputTokens)} cost ${fmtCost(t.current.totalCostUsd)} (n=${t.current.reportedRuns})`,
+        );
+      }
+      if (t.baseline.reportedRuns > 0 && t.current.reportedRuns > 0) {
+        info(`  cost Δ   ${sign}${fmtCost(t.costDelta)}`);
+      }
     }
     if (opts.compare) {
       const base = await loadSnapshot(cfg.snapshots.dir, opts.compare);
@@ -412,5 +515,11 @@ export async function runCommand(opts: RunOptions): Promise<number> {
   } finally {
     if (baselineWt) await baselineWt.cleanup();
     await debug.close();
+    if (ephemeralDir) {
+      // Best-effort cleanup of the ephemeral snapshots dir. The provider may
+      // have written per-row cwds underneath; rm -rf is the only thing that
+      // covers all the templating shapes.
+      rmSync(ephemeralDir, { recursive: true, force: true });
+    }
   }
 }

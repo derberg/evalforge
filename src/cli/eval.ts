@@ -3,7 +3,7 @@ import { loadPrompts, filterPrompts } from '../prompts.js';
 import { runBenchmark } from '../run.js';
 import { saveSnapshot, loadSnapshot, pruneFailedRuns } from '../snapshot.js';
 import { resolveSha } from '../swap.js';
-import { info, ok, warn, err, progress, step } from '../logger.js';
+import { info, ok, warn, err, progress, step, judgeResult } from '../logger.js';
 import { initDebug, noopDebug, type DebugLogger } from '../debug.js';
 import type { Config, Snapshot } from '../types.js';
 
@@ -177,6 +177,7 @@ export async function evalCommand(opts: EvalOptions): Promise<number> {
           const runLeg = runDurations.get(ev.runId) ?? 0;
           runDurations.delete(ev.runId);
           progress(runIdx, total, ev.runId, status, runLeg + ev.durationMs);
+          judgeResult(ev.score, ev.rationale, ev.error);
         }
       },
     });

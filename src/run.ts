@@ -103,7 +103,14 @@ export type ProgressEvent =
   | { kind: 'run-start'; rowId: string }
   | { kind: 'run-end'; rowId: string; durationMs: number; error: string | null }
   | { kind: 'judge-start'; runId: string }
-  | { kind: 'judge-end'; runId: string; score: number; error: string | null; durationMs: number };
+  | {
+      kind: 'judge-end';
+      runId: string;
+      score: number;
+      rationale: string;
+      error: string | null;
+      durationMs: number;
+    };
 
 async function mapWithConcurrency<T>(
   items: T[],
@@ -305,6 +312,7 @@ async function judgeRun(
     kind: 'judge-end',
     runId: run.id,
     score: judgment.score,
+    rationale: judgment.rationale,
     error: judgment.error,
     durationMs: Date.now() - judgeStart,
   });

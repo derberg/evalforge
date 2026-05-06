@@ -168,6 +168,69 @@ describe('ef view', () => {
     expect(html).not.toMatch(/\.cell\{[^}]*max-height/);
   });
 
+  it('renders single-variant snapshots as standalone evaluation rather than "no baseline to compare against"', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ef-view-solo-'));
+    mkdirSync(join(dir, 'solo'), { recursive: true });
+    writeFileSync(
+      join(dir, 'solo', 'snapshot.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        name: 'solo',
+        createdAt: '2026-05-06T00:00:00Z',
+        plugin: { path: '', baselineRef: '', baselineSha: '', currentRef: 'HEAD', currentSha: 'abc1234' },
+        config: {},
+        judge: { provider: 'ollama', model: 'q' },
+        prompts: [{ id: 'p1', prompt: 'x', rubric: 'r' }],
+        runs: [
+          {
+            id: 'p1::current::1',
+            promptId: 'p1',
+            variant: 'current',
+            sample: 1,
+            output: 'a single variant output',
+            durationMs: 1,
+            exitCode: 0,
+            error: null,
+          },
+        ],
+        judgments: [
+          {
+            runId: 'p1::current::1',
+            score: 4,
+            rationale: 'ok',
+            rubricHash: '',
+            judgeProvider: 'ollama',
+            judgeModel: 'q',
+            raw: '',
+          },
+        ],
+        summary: {
+          baseline: { n: 0, mean: 0, median: 0, variance: 0 },
+          current: { n: 1, mean: 4, median: 4, variance: 0 },
+          delta: 4,
+        },
+      }),
+    );
+    const html = await viewCommand({ dir, name: 'solo', writeHtml: true, open: false });
+    // The pre-fix output rendered "current only" with the misleading hook
+    // "No baseline variant runs to compare against." That copy is the broken
+    // path; the new render uses verdict label "evaluation" with a hook that
+    // names the standalone nature instead.
+    expect(html).not.toMatch(/No baseline variant runs to compare against/);
+    expect(html).not.toMatch(/No current variant runs to compare against/);
+    expect(html).toMatch(/data-verdict="evaluation"/);
+    expect(html).toMatch(/Standalone evaluation/);
+    // Single-column variants grid: the CSS override must be present and the
+    // section should not include a "baseline" variant header for solo.
+    expect(html).toMatch(/\.variants-solo\{grid-template-columns:1fr/);
+    expect(html).toContain('variants variants-solo');
+    // The per-prompt row should not include a paired baseline bar.
+    expect(html).toContain('prow prow-solo');
+    expect(html).not.toMatch(/<div class="prow-bar prow-bar-base">/);
+    // The metric label must drop the "vs baseline" delta phrasing for solo runs.
+    expect(html).toContain('standalone (no baseline)');
+  });
+
   it('uses just the short SHA when no ref label is recorded (legacy snapshots)', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'ef-view-'));
     mkdirSync(join(dir, 'legacy'), { recursive: true });

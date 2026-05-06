@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.12.0 — 2026-05-06
+
+**Features:**
+
+- **Judge score + rationale prints to stdout under each row.** Every `judge-end` now writes a second line with the score and the judge's verbatim rationale (wrapped at ~96 chars, indented under the progress line). Previously the only way to see *why* a row scored what it did was to open `snapshot.json` or `view.html`, which made the inner loop "tweak rubric → run → hunt through HTML → tweak again" instead of "tweak → run → read → tweak." The `judge-end` ProgressEvent now carries `rationale: string` alongside the existing `score`/`error`/`durationMs` (additive, existing consumers ignore unknown fields).
+- **`eb run --no-save` runs without persisting a snapshot.** The matrix executes against a tempdir snapshots root that's `rm -rf`'d on exit; the configured `snapshots.dir` is left untouched. Pair with `--only` to iterate on a single rubric without snapshot housekeeping (`eb snapshot rm` after each try is exactly the friction this removes). Mutually exclusive with `--save-as`, `--retry-failed`, `--rejudge`, `--force`, and `--compare` — all of those operate on persisted snapshots.
+- **`eb run --prompt-inline` reads a single prompt + rubric interactively.** TTY-only, line-based input with `.` as the multi-line terminator (chosen over EOF for cross-shell ergonomics and over a fixed delimiter to avoid colliding with rubric content). Implies `--no-save` unless `--save-as` is given, and runs the current side only — the use case is "throwaway rubric I'm sketching out, don't make me edit `prompts.yaml` to try it." Validates the id against the same kebab-case shape `prompts.yaml` requires, and re-asks instead of crashing on a bad id or empty body.
+- **`eb view` now renders single-variant snapshots as standalone evaluations** instead of the misleading "No baseline variant runs to compare against" placeholder. `eb eval` snapshots and `--prompt-inline` runs get a verdict labelled `evaluation`, a single-column variants grid, a single-bar per-prompt table (no delta column), and metric copy that reads "standalone (no baseline)" instead of a meaningless `+0.00 vs baseline`. Dual-variant rendering is unchanged.
+
+**Schema:**
+
+- `ProgressEvent`'s `judge-end` variant adds `rationale: string`. Existing consumers that switch on `kind` and ignore unknown fields are unaffected.
+
 ## 0.11.8 — 2026-05-05
 
 **Fixes:**
